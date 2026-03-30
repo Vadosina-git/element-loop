@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://darenaview001"]
+
+[ext_resource type="Script" path="res://src/arena/arena_view.gd" id="1_arena"]
+[ext_resource type="Script" path="res://src/main/arena_camera.gd" id="2_camera"]
+
+[node name="ArenaView" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+
+[node name="Walls" type="Node3D" parent="."]
+
+[node name="ArenaCamera" type="Camera3D" parent="."]
+script = ExtResource("2_camera")
