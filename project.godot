@@ -1,0 +1,30 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; but it can also be manually edited if needed.
+
+config_version=5
+
+[application]
+
+config/name="Element Loop"
+run/main_scene="res://src/main/game_controller.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+
+[autoload]
+
+GameManager="*res://src/systems/game_manager.gd"
+AudioManager="*res://src/systems/audio_manager.gd"
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1920
+window/handheld/orientation=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
