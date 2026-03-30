@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/arena/map_objects/zone_object.gd" id="1_zone"]
+
+[node name="ZoneObject" type="Node3D"]
+script = ExtResource("1_zone")
+
+[node name="Area3D" type="Area3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
