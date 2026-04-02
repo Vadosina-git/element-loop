@@ -8,6 +8,7 @@ extends Node
 
 # --- Сигналы ---
 signal zone_button_pressed()
+signal dash_pressed()
 
 # --- Константы ---
 const TAP_ARRIVE_DISTANCE: float = 0.3
@@ -35,7 +36,18 @@ func _process(_delta: float) -> void:
 	if _player == null:
 		return
 
-	# Приоритет: джойстик > tap-to-move
+	# Во время рывка — не обрабатываем движение
+	if _player._is_dashing:
+		return
+
+	# Приоритет: клавиатура > джойстик > tap-to-move
+	var kb_dir: Vector2 = _get_keyboard_direction()
+	if kb_dir.length() > 0.1:
+		var direction := Vector3(kb_dir.x, 0.0, kb_dir.y)
+		_player.set_move_direction(direction)
+		_has_tap_target = false
+		return
+
 	if _joystick != null:
 		var joy_dir: Vector2 = _joystick.get_direction()
 		if joy_dir.length() > 0.1:
@@ -60,7 +72,23 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _player == null or _camera == null:
+	if _player == null:
+		return
+
+	# Клавиатура — пробел (зона) и Shift (рывок)
+	if event is InputEventKey:
+		var key_event: InputEventKey = event as InputEventKey
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_SPACE:
+				zone_button_pressed.emit()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_SHIFT:
+				dash_pressed.emit()
+				get_viewport().set_input_as_handled()
+				return
+
+	if _camera == null:
 		return
 
 	if event is InputEventScreenTouch:
@@ -74,6 +102,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # --- Приватные методы ---
+
+## Считывает направление с клавиатуры (WASD / стрелки).
+func _get_keyboard_direction() -> Vector2:
+	var dir := Vector2.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		dir.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		dir.y += 1.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		dir.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		dir.x += 1.0
+	return dir.normalized()
+
 
 ## Рейкаст от камеры к плоскости Y=0 для определения точки tap-to-move.
 func _handle_tap(screen_pos: Vector2) -> void:
