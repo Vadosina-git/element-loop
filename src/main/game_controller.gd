@@ -45,8 +45,14 @@ func _ready() -> void:
 	_player.zone_placed.connect(_on_player_zone_placed)
 	_player.died.connect(_on_player_died)
 
-	# Подключаем сигналы HUD → действия
+	# Подключаем сигналы HUD и ввода → действия
 	_hud.zone_button_pressed.connect(_on_zone_button_pressed)
+	_player_input.zone_button_pressed.connect(_on_zone_button_pressed)
+
+	# Подключаем рывок
+	_hud.dash_button_pressed.connect(_on_dash_button_pressed)
+	_player_input.dash_pressed.connect(_on_dash_button_pressed)
+	_player.dash_cooldown_changed.connect(_hud.update_dash_cooldown)
 
 	# Подключаем сигналы книги
 	_book.element_picked.connect(_on_element_picked)
@@ -182,6 +188,11 @@ func _on_enemy_died(_dead_enemy: EnemyBase) -> void:
 ## Враг атаковал игрока.
 func _on_enemy_attacked_player(_attacker: EnemyBase) -> void:
 	_player.take_damage(1)
+
+
+## Нажата кнопка рывка (UI или Shift).
+func _on_dash_button_pressed() -> void:
+	_player.try_dash()
 
 
 ## Игрок умер.
