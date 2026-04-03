@@ -72,6 +72,12 @@ func _ready() -> void:
 	_spawn_books()
 	_hud.setup_book_indicators(_books, _arena._camera)
 
+	# Настраиваем отслеживание врагов для подсветки
+	var enemy_list: Array[EnemyBase] = []
+	for eid: int in _enemies:
+		enemy_list.append(_enemies[eid] as EnemyBase)
+	_hud.setup_enemy_tracking(enemy_list)
+
 	# Подключаем сигналы боевой логики
 	_combat_logic.enemy_marked.connect(_on_enemy_marked)
 	_combat_logic.enemy_mark_expired.connect(_on_mark_expired)

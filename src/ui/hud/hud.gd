@@ -28,6 +28,9 @@ const ARROW_SIZE: float = 40.0
 var _camera: Camera3D = null
 var _book_arrows: Array[Label] = []
 var _tracked_books: Array[Node3D] = []
+var _tracked_enemies: Array[EnemyBase] = []
+var _enemy_arrows: Array[Label] = []
+var _current_element: int = -1
 
 # --- @onready переменные ---
 
@@ -41,6 +44,7 @@ var _tracked_books: Array[Node3D] = []
 @onready var _game_over_panel: PanelContainer = %GameOverPanel
 @onready var _restart_button: Button = %RestartButton
 @onready var _camera_bar: HBoxContainer = %CameraBar
+@onready var _element_wheel: ElementWheel = %ElementWheel
 
 # --- Встроенные колбеки ---
 
@@ -55,6 +59,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_book_arrows()
+	_update_enemy_arrows()
 
 # --- Публичные методы ---
 
@@ -82,6 +87,9 @@ func update_element(element: int) -> void:
 		_element_name_label.add_theme_color_override("font_color", color)
 		_set_slot_color(Color(color.r, color.g, color.b, 0.3))
 		_zone_button.disabled = false
+	_current_element = element
+	_element_wheel.set_active_element(element)
+	_update_enemy_highlights()
 
 ## Обновляет индикатор кулдауна рывка.
 func update_dash_cooldown(remaining: float, total: float) -> void:
@@ -104,6 +112,21 @@ func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
 		arrow.visible = false
 		add_child(arrow)
 		_book_arrows.append(arrow)
+
+
+## Настраивает отслеживание врагов для подсветки уязвимых.
+func setup_enemy_tracking(enemies: Array[EnemyBase]) -> void:
+	_tracked_enemies = enemies
+	for arrow: Label in _enemy_arrows:
+		arrow.queue_free()
+	_enemy_arrows.clear()
+	for _i: int in range(enemies.size()):
+		var arrow := Label.new()
+		arrow.text = "⚔️ ➤"
+		arrow.add_theme_font_size_override("font_size", 40)
+		arrow.visible = false
+		add_child(arrow)
+		_enemy_arrows.append(arrow)
 
 
 ## Показывает экран Game Over.
@@ -186,6 +209,76 @@ func _update_book_arrows() -> void:
 		# Угол стрелки
 		var angle: float = dir.angle()
 		arrow.rotation = angle
+		arrow.position = edge_pos - arrow.size / 2.0
+
+
+## Обновляет подсветку уязвимых врагов на поле.
+func _update_enemy_highlights() -> void:
+	for enemy: EnemyBase in _tracked_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if _current_element >= 0:
+			var el: ElementTable.Element = _current_element as ElementTable.Element
+			if ElementTable.is_counter(el, enemy.element):
+				enemy.set_highlighted(true)
+			else:
+				enemy.set_highlighted(false)
+		else:
+			enemy.set_highlighted(false)
+
+
+## Обновляет стрелки на уязвимых врагов за экраном.
+func _update_enemy_arrows() -> void:
+	if _camera == null:
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+
+	for i: int in range(_tracked_enemies.size()):
+		if i >= _enemy_arrows.size():
+			break
+		var enemy: EnemyBase = _tracked_enemies[i]
+		var arrow: Label = _enemy_arrows[i]
+
+		if not is_instance_valid(enemy):
+			arrow.visible = false
+			continue
+
+		# Показываем стрелку только для уязвимых врагов
+		var is_vulnerable: bool = false
+		if _current_element >= 0:
+			var el: ElementTable.Element = _current_element as ElementTable.Element
+			is_vulnerable = ElementTable.is_counter(el, enemy.element)
+
+		if not is_vulnerable:
+			arrow.visible = false
+			continue
+
+		var screen_pos: Vector2 = _camera.unproject_position(enemy.global_position)
+		var is_behind: bool = _camera.is_position_behind(enemy.global_position)
+		var margin: float = ARROW_MARGIN
+		var on_screen: bool = not is_behind and screen_pos.x > margin and screen_pos.x < viewport_size.x - margin and screen_pos.y > margin and screen_pos.y < viewport_size.y - margin
+
+		if on_screen:
+			arrow.visible = false
+			continue
+
+		arrow.visible = true
+		if is_behind:
+			screen_pos = viewport_size - screen_pos
+
+		var center: Vector2 = viewport_size / 2.0
+		var dir: Vector2 = (screen_pos - center).normalized()
+		var edge_pos: Vector2 = center
+		var half: Vector2 = (viewport_size / 2.0) - Vector2(margin, margin)
+		if absf(dir.x) > 0.001:
+			var t_x: float = half.x / absf(dir.x)
+			var t_y: float = half.y / absf(dir.y) if absf(dir.y) > 0.001 else INF
+			var t: float = minf(t_x, t_y)
+			edge_pos = center + dir * t
+		elif absf(dir.y) > 0.001:
+			edge_pos = center + dir * (half.y / absf(dir.y))
+
+		arrow.rotation = dir.angle()
 		arrow.position = edge_pos - arrow.size / 2.0
 
 

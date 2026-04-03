@@ -23,6 +23,7 @@ theme_override_font_sizes/font_size = 80
 text = "HP: 2"
 
 [node name="ElementWheel" type="Control" parent="."]
+unique_name_in_owner = true
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0

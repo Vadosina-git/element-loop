@@ -55,6 +55,8 @@ var _material: StandardMaterial3D = null
 var _anim_time: float = 0.0
 var _wander_direction: Vector3 = Vector3.ZERO
 var _detection_circle: MeshInstance3D = null
+var _highlight_circle: MeshInstance3D = null
+var _is_highlighted: bool = false
 var _element_label: Label3D = null
 
 # --- @onready переменные ---
@@ -71,6 +73,7 @@ func _ready() -> void:
 	_setup_visual()
 	_setup_element_label()
 	_setup_detection_circle()
+	_setup_highlight_circle()
 
 
 func _physics_process(delta: float) -> void:
@@ -147,6 +150,13 @@ func take_damage(amount: int) -> void:
 	if hp <= 0:
 		hp = 0
 		died.emit(self)
+
+
+## Включает/выключает подсветку уязвимости.
+func set_highlighted(enabled: bool) -> void:
+	_is_highlighted = enabled
+	if _highlight_circle != null:
+		_highlight_circle.visible = enabled
 
 
 ## Задаёт направление патрулирования (от AI).
@@ -249,11 +259,48 @@ void fragment() {
 	add_child(_detection_circle)
 
 
-## Обновляет позицию круга обнаружения (top-level, не вращается с врагом).
+## Создаёт подсветку уязвимости — заполненный полупрозрачный круг.
+func _setup_highlight_circle() -> void:
+	_highlight_circle = MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	var circle_size: float = detection_range * 2.0
+	plane.size = Vector2(circle_size, circle_size)
+	_highlight_circle.mesh = plane
+	_highlight_circle.set_as_top_level(true)
+	_highlight_circle.visible = false
+
+	var shader := Shader.new()
+	shader.code = "
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+
+uniform vec4 fill_color : source_color = vec4(1.0, 1.0, 0.3, 0.2);
+
+void fragment() {
+	vec2 uv_centered = UV - vec2(0.5);
+	float dist = length(uv_centered) * 2.0;
+	float mask = 1.0 - smoothstep(0.9, 1.0, dist);
+	ALBEDO = fill_color.rgb;
+	ALPHA = mask * fill_color.a;
+}
+"
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	var color: Color = ELEMENT_COLORS.get(element, Color.WHITE)
+	mat.set_shader_parameter("fill_color", Color(color.r, color.g, color.b, 0.25))
+	_highlight_circle.material_override = mat
+	add_child(_highlight_circle)
+
+
+## Обновляет позицию кругов (top-level, не вращаются с врагом).
 func _update_detection_circle() -> void:
+	var flat_pos: Vector3 = Vector3(global_position.x, 0.02, global_position.z)
 	if _detection_circle != null:
-		_detection_circle.global_position = Vector3(global_position.x, 0.02, global_position.z)
+		_detection_circle.global_position = flat_pos
 		_detection_circle.global_rotation = Vector3.ZERO
+	if _highlight_circle != null and _highlight_circle.visible:
+		_highlight_circle.global_position = Vector3(flat_pos.x, 0.03, flat_pos.z)
+		_highlight_circle.global_rotation = Vector3.ZERO
 
 
 ## Анимация врага: покачивание при ходьбе, тряска при телеграфе.
