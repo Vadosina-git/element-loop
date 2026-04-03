@@ -30,6 +30,9 @@ jobs:
           cp /root/.local/share/godot/templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || \
           echo "Searching for templates..." && find / -name "web_nothreads_release.zip" 2>/dev/null | head -5
 
+      - name: Import project assets
+        run: godot --headless --import 2>&1 || true
+
       - name: Export to Web
         run: |
           mkdir -p builds/web
