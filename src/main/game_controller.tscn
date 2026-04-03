@@ -1,9 +1,8 @@
-[gd_scene load_steps=7 format=3 uid="uid://cgamecontrol1"]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://src/main/game_controller.gd" id="1_controller"]
 [ext_resource type="PackedScene" path="res://src/arena/arena_view.tscn" id="2_arena"]
 [ext_resource type="PackedScene" path="res://src/player/player_character.tscn" id="3_player"]
-[ext_resource type="PackedScene" path="res://src/arena/map_objects/book_object.tscn" id="4_book"]
 [ext_resource type="PackedScene" path="res://src/ui/hud/hud.tscn" id="5_hud"]
 [ext_resource type="PackedScene" path="res://src/ui/controls/virtual_joystick.tscn" id="6_joystick"]
 [ext_resource type="Script" path="res://src/player/player_input.gd" id="7_input"]
@@ -15,9 +14,6 @@ script = ExtResource("1_controller")
 
 [node name="PlayerCharacter" parent="ArenaView" instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3)
-
-[node name="BookObject" parent="ArenaView" instance=ExtResource("4_book")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 0)
 
 [node name="HUD" parent="." instance=ExtResource("5_hud")]
 

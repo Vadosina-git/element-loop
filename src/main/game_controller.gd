@@ -10,6 +10,7 @@ extends Node
 
 const ZONE_SCENE: String = "res://src/arena/map_objects/zone_object.tscn"
 const ENEMY_SCENE: String = "res://src/enemies/enemy_base.tscn"
+const BOOK_SCENE: String = "res://src/arena/map_objects/book_object.tscn"
 
 # --- Приватные переменные ---
 
@@ -18,11 +19,15 @@ var _player: PlayerCharacter = null
 var _player_input: PlayerInput = null
 var _hud: HUD = null
 var _joystick: VirtualJoystick = null
-var _book: BookObject = null
+var _books: Array[BookObject] = []
 var _combat_logic: CombatLogic = CombatLogic.new()
 var _zone_logic: ZoneLogic = ZoneLogic.new()
-var _enemy: EnemyBase = null
+var _enemies: Dictionary = {}  # {enemy_id: EnemyBase}
 var _active_zones: Array[ZoneObject] = []
+var _next_enemy_id: int = 1
+
+const ENEMY_COUNT: int = 20
+const SPAWN_MARGIN: float = 2.0
 
 
 # --- Встроенные колбеки ---
@@ -34,7 +39,9 @@ func _ready() -> void:
 	_hud = $HUD as HUD
 	_joystick = $UILayer/VirtualJoystick as VirtualJoystick
 	_player_input = $PlayerInput as PlayerInput
-	_book = $ArenaView/BookObject as BookObject
+
+	# Настраиваем камеру — слежение за игроком
+	_arena._camera.set_follow_target(_player)
 
 	# Настраиваем систему ввода
 	_player_input.setup(_player, _joystick, _arena._camera)
@@ -54,8 +61,16 @@ func _ready() -> void:
 	_player_input.dash_pressed.connect(_on_dash_button_pressed)
 	_player.dash_cooldown_changed.connect(_hud.update_dash_cooldown)
 
-	# Подключаем сигналы книги
-	_book.element_picked.connect(_on_element_picked)
+	# Подключаем перезапуск
+	_hud.restart_pressed.connect(_on_restart_pressed)
+
+	# Подключаем пресеты камеры
+	_hud.camera_preset_selected.connect(_on_camera_preset_selected)
+	_hud.setup_camera_presets(_arena._camera.get_preset_names(), _arena._camera.current_preset)
+
+	# Спавним книги и настраиваем индикаторы
+	_spawn_books()
+	_hud.setup_book_indicators(_books, _arena._camera)
 
 	# Подключаем сигналы боевой логики
 	_combat_logic.enemy_marked.connect(_on_enemy_marked)
@@ -64,8 +79,8 @@ func _ready() -> void:
 	_combat_logic.enemy_rage_expired.connect(_on_rage_expired)
 	_combat_logic.enemy_killed.connect(_on_enemy_killed)
 
-	# Спавним тестового врага
-	_spawn_enemy()
+	# Спавним врагов
+	_spawn_enemies()
 
 
 func _process(delta: float) -> void:
@@ -74,23 +89,67 @@ func _process(delta: float) -> void:
 
 # --- Приватные методы ---
 
-## Создаёт тестового врага на арене.
-func _spawn_enemy() -> void:
+## Спавнит всех врагов в случайных точках.
+func _spawn_enemies() -> void:
 	var scene: PackedScene = load(ENEMY_SCENE) as PackedScene
-	_enemy = scene.instantiate() as EnemyBase
-	_enemy.element = ElementTable.Element.FIRE
-	_enemy.level = 1
-	_enemy.enemy_id = 1
-	_enemy.position = Vector3(3.0, 0.0, -3.0)
-	_arena.add_child(_enemy)
-	_enemy.set_target(_player)
+	var elements: Array[ElementTable.Element] = [
+		ElementTable.Element.FIRE,
+		ElementTable.Element.WATER,
+		ElementTable.Element.TREE,
+		ElementTable.Element.EARTH,
+		ElementTable.Element.METAL,
+	]
 
-	# Подключаем сигналы врага
-	_enemy.attacked_player.connect(_on_enemy_attacked_player)
-	_enemy.died.connect(_on_enemy_died)
+	var enemy_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT)
+	for i: int in range(ENEMY_COUNT):
+		var enemy: EnemyBase = scene.instantiate() as EnemyBase
+		enemy.element = elements[i % elements.size()]
+		enemy.level = 1
+		enemy.enemy_id = _next_enemy_id
+		_next_enemy_id += 1
+		enemy.position = enemy_positions[i]
+		_arena.add_child(enemy)
+		enemy.set_target(_player)
 
-	# Регистрируем в боевой логике
-	_combat_logic.register_enemy(_enemy.enemy_id, _enemy.element, _enemy.hp)
+		# Подключаем сигналы врага
+		enemy.attacked_player.connect(_on_enemy_attacked_player)
+		enemy.died.connect(_on_enemy_died)
+
+		# Регистрируем
+		_enemies[enemy.enemy_id] = enemy
+		_combat_logic.register_enemy(enemy.enemy_id, enemy.element, enemy.hp)
+
+
+## Спавнит книги в случайных точках арены.
+func _spawn_books() -> void:
+	var scene: PackedScene = load(BOOK_SCENE) as PackedScene
+	var book_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT)
+	for i: int in range(ENEMY_COUNT):
+		var book: BookObject = scene.instantiate() as BookObject
+		book.position = book_positions[i]
+		_arena.add_child(book)
+		book.element_picked.connect(_on_element_picked)
+		_books.append(book)
+
+
+## Удаляет одну случайную книгу с поля.
+func _remove_one_book() -> void:
+	if _books.is_empty():
+		return
+	var idx: int = randi() % _books.size()
+	var book: BookObject = _books[idx]
+	_books.remove_at(idx)
+	if is_instance_valid(book):
+		book.queue_free()
+
+
+## Возвращает врага по ID или null.
+func _get_enemy(enemy_id: int) -> EnemyBase:
+	if _enemies.has(enemy_id):
+		var enemy: EnemyBase = _enemies[enemy_id] as EnemyBase
+		if is_instance_valid(enemy):
+			return enemy
+	return null
 
 
 ## Удаляет старейшую зону при переполнении (FIFO).
@@ -149,39 +208,43 @@ func _on_enemy_exited_zone(_enemy_ref: EnemyBase, _zone: ZoneObject) -> void:
 
 ## Боевая логика: метка наложена на врага.
 func _on_enemy_marked(enemy_id: int) -> void:
-	if _enemy != null and _enemy.enemy_id == enemy_id:
-		_enemy.apply_mark()
+	var enemy: EnemyBase = _get_enemy(enemy_id)
+	if enemy != null:
+		enemy.apply_mark()
 
 
 ## Боевая логика: таймер метки истёк → урон уже нанесён в CombatLogic.
-## Здесь только обновляем визуал. Если враг мёртв — _on_enemy_killed обработает.
 func _on_mark_expired(enemy_id: int) -> void:
-	if _enemy != null and _enemy.enemy_id == enemy_id:
-		_enemy.remove_mark()
+	var enemy: EnemyBase = _get_enemy(enemy_id)
+	if enemy != null:
+		enemy.remove_mark()
 
 
 ## Боевая логика: ярость наложена на врага.
 func _on_enemy_enraged(enemy_id: int) -> void:
-	if _enemy != null and _enemy.enemy_id == enemy_id:
-		_enemy.apply_rage()
+	var enemy: EnemyBase = _get_enemy(enemy_id)
+	if enemy != null:
+		enemy.apply_rage()
 
 
 ## Боевая логика: таймер ярости истёк.
 func _on_rage_expired(enemy_id: int) -> void:
-	if _enemy != null and _enemy.enemy_id == enemy_id:
-		_enemy.remove_rage()
+	var enemy: EnemyBase = _get_enemy(enemy_id)
+	if enemy != null:
+		enemy.remove_rage()
 
 
 ## Боевая логика: враг убит (HP <= 0 после метки).
 func _on_enemy_killed(enemy_id: int) -> void:
-	if _enemy != null and _enemy.enemy_id == enemy_id:
-		_enemy.queue_free()
-		_enemy = null
+	var enemy: EnemyBase = _get_enemy(enemy_id)
+	if enemy != null:
+		enemy.queue_free()
+		_enemies.erase(enemy_id)
+	_remove_one_book()
 
 
 ## Враг испустил сигнал died (из EnemyBase.take_damage).
 func _on_enemy_died(_dead_enemy: EnemyBase) -> void:
-	# Обрабатывается через _on_enemy_killed от combat_logic
 	pass
 
 
@@ -195,7 +258,25 @@ func _on_dash_button_pressed() -> void:
 	_player.try_dash()
 
 
+## Выбран пресет камеры.
+func _on_camera_preset_selected(preset_name: String) -> void:
+	_arena._camera.apply_preset(preset_name)
+	_hud.update_camera_preset(preset_name)
+
+
 ## Игрок умер.
 func _on_player_died() -> void:
-	# TODO: экран смерти, рестарт
-	pass
+	_hud.show_game_over()
+	set_process(false)
+
+
+## Перезапуск уровня.
+func _on_restart_pressed() -> void:
+	get_tree().reload_current_scene()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event: InputEventKey = event as InputEventKey
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_R:
+			_on_restart_pressed()

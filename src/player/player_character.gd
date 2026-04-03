@@ -15,7 +15,7 @@ signal dash_cooldown_changed(remaining: float, total: float)
 signal dash_started()
 
 # --- Константы ---
-const MOVE_SPEED: float = 5.0
+const MOVE_SPEED: float = 3.33
 const MAX_HP: int = 2
 const DASH_DISTANCE: float = 3.0
 const DASH_DURATION: float = 0.25
@@ -36,6 +36,8 @@ var _is_dashing: bool = false
 var _dash_timer: float = 0.0
 var _dash_cooldown_timer: float = 0.0
 var _dash_direction: Vector3 = Vector3.ZERO
+var _damage_flash_timer: float = 0.0
+var _original_color: Color = Color(0.3, 0.6, 0.9)
 var _dash_start_pos: Vector3 = Vector3.ZERO
 var _dash_particles: GPUParticles3D = null
 
@@ -65,24 +67,22 @@ func _physics_process(delta: float) -> void:
 			_is_dashing = false
 			_dash_cooldown_timer = DASH_COOLDOWN
 			dash_cooldown_changed.emit(_dash_cooldown_timer, DASH_COOLDOWN)
-			# Финальная позиция на земле
-			global_position = _dash_start_pos + _dash_direction * DASH_DISTANCE
-			global_position.y = 0.0
 			velocity = Vector3.ZERO
 		else:
-			# Интерполяция позиции + параболический прыжок
-			var target_pos: Vector3 = _dash_start_pos + _dash_direction * DASH_DISTANCE * progress
-			var jump_y: float = DASH_JUMP_HEIGHT * 4.0 * progress * (1.0 - progress)
-			target_pos.y = jump_y
-			global_position = target_pos
-			velocity = Vector3.ZERO
+			# Рывок через velocity — учитывает коллизии
+			var dash_speed: float = DASH_DISTANCE / DASH_DURATION
+			velocity = _dash_direction * dash_speed
+			velocity.y = 0.0
+		move_and_slide()
 		_animate_walk(delta)
+		_animate_damage_flash(delta)
 		return
 
 	# Обычное движение
 	velocity = _move_direction * MOVE_SPEED
 	move_and_slide()
 	_animate_walk(delta)
+	_animate_damage_flash(delta)
 
 
 # --- Публичные методы ---
@@ -124,6 +124,7 @@ func place_zone() -> bool:
 func take_damage(amount: int) -> void:
 	hp = maxi(0, hp - amount)
 	hp_changed.emit(hp)
+	_damage_flash_timer = 0.6
 	if hp <= 0:
 		died.emit()
 
@@ -165,6 +166,22 @@ func is_dash_on_cooldown() -> bool:
 
 
 # --- Приватные методы ---
+
+## Мигание красным при получении урона.
+func _animate_damage_flash(delta: float) -> void:
+	if _damage_flash_timer <= 0.0:
+		return
+	_damage_flash_timer -= delta
+	if _mesh_node == null or _mesh_node.material_override == null:
+		return
+	var mat: StandardMaterial3D = _mesh_node.material_override as StandardMaterial3D
+	if _damage_flash_timer <= 0.0:
+		_damage_flash_timer = 0.0
+		mat.albedo_color = _original_color
+	else:
+		var blink: bool = fmod(_damage_flash_timer * 10.0, 1.0) > 0.5
+		mat.albedo_color = Color(1.0, 0.1, 0.1) if blink else _original_color
+
 
 ## Создаёт систему частиц дыма для рывка.
 func _setup_dash_particles() -> void:

@@ -10,5 +10,7 @@ script = ExtResource("1_arena")
 
 [node name="Walls" type="Node3D" parent="."]
 
+[node name="Rocks" type="Node3D" parent="."]
+
 [node name="ArenaCamera" type="Camera3D" parent="."]
 script = ExtResource("2_camera")

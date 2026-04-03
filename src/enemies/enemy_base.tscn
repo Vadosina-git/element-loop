@@ -21,7 +21,7 @@ path_desired_distance = 0.5
 target_desired_distance = 0.5
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0, 0)
 
 [node name="EnemyAI" type="Node" parent="."]
 script = ExtResource("2_enemy_ai")

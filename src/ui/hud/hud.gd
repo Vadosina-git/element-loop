@@ -11,27 +11,50 @@ signal zone_button_pressed
 ## Испускается при нажатии кнопки «Рывок».
 signal dash_button_pressed
 
+## Испускается при нажатии кнопки «Перезапуск».
+signal restart_pressed
+
+## Испускается при выборе пресета камеры.
+signal camera_preset_selected(preset_name: String)
+
 # --- Константы ---
 
 const DASH_COOLDOWN_DEFAULT: float = 5.0
+const ARROW_MARGIN: float = 60.0
+const ARROW_SIZE: float = 40.0
+
+# --- Приватные переменные ---
+
+var _camera: Camera3D = null
+var _book_arrows: Array[Label] = []
+var _tracked_books: Array[Node3D] = []
 
 # --- @onready переменные ---
 
 @onready var _hp_label: Label = %HPLabel
-@onready var _element_label: Label = %ElementLabel
+@onready var _element_icon: Label = %ElementIcon
+@onready var _element_name_label: Label = %ElementName
+@onready var _element_slot: PanelContainer = %ElementSlot
 @onready var _zone_button: Button = %ZoneButton
 @onready var _dash_button: Button = %DashButton
-@onready var _dash_cooldown_bar: TextureProgressBar = %DashCooldownBar
-@onready var _dash_cooldown_label: Label = %DashCooldownLabel
+@onready var _dash_cooldown_fill: ColorRect = %CooldownFill
+@onready var _game_over_panel: PanelContainer = %GameOverPanel
+@onready var _restart_button: Button = %RestartButton
+@onready var _camera_bar: HBoxContainer = %CameraBar
 
 # --- Встроенные колбеки ---
 
 func _ready() -> void:
 	_zone_button.pressed.connect(_on_zone_button_pressed)
 	_dash_button.pressed.connect(_on_dash_button_pressed)
+	_restart_button.pressed.connect(_on_restart_button_pressed)
 	update_hp(2)
 	update_element(-1)
 	_update_dash_cooldown_display(0.0, DASH_COOLDOWN_DEFAULT)
+
+
+func _process(_delta: float) -> void:
+	_update_book_arrows()
 
 # --- Публичные методы ---
 
@@ -41,30 +64,143 @@ func update_hp(hp: int) -> void:
 
 
 ## Обновляет отображение текущей стихии.
-## Передать -1, чтобы показать отсутствие стихии и заблокировать кнопку зоны.
+## Передать -1, чтобы показать пустую ячейку и заблокировать кнопку зоны.
 func update_element(element: int) -> void:
 	if element == -1:
-		_element_label.text = "Стихия: —"
+		_element_icon.text = "?"
+		_element_icon.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35, 0.6))
+		_element_name_label.text = "—"
+		_element_name_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 0.6))
+		_set_slot_color(Color(0.15, 0.15, 0.15, 0.8))
 		_zone_button.disabled = true
 	else:
-		_element_label.text = "Стихия: %s" % _element_name(element as ElementTable.Element)
+		var el: ElementTable.Element = element as ElementTable.Element
+		var color: Color = _element_color(el)
+		_element_icon.text = _element_emoji(el)
+		_element_icon.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+		_element_name_label.text = _element_name(el)
+		_element_name_label.add_theme_color_override("font_color", color)
+		_set_slot_color(Color(color.r, color.g, color.b, 0.3))
 		_zone_button.disabled = false
 
 ## Обновляет индикатор кулдауна рывка.
 func update_dash_cooldown(remaining: float, total: float) -> void:
 	_update_dash_cooldown_display(remaining, total)
 
+
+## Настраивает индикаторы-стрелки для книг.
+func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
+	_camera = camera
+	_tracked_books.clear()
+	for arrow: Label in _book_arrows:
+		arrow.queue_free()
+	_book_arrows.clear()
+
+	for book: BookObject in books:
+		_tracked_books.append(book)
+		var arrow := Label.new()
+		arrow.text = "📖 ➤"
+		arrow.add_theme_font_size_override("font_size", 40)
+		arrow.visible = false
+		add_child(arrow)
+		_book_arrows.append(arrow)
+
+
+## Показывает экран Game Over.
+func show_game_over() -> void:
+	_game_over_panel.visible = true
+
+
+## Создаёт кнопки пресетов камеры.
+func setup_camera_presets(names: Array[String], current: String) -> void:
+	for child: Node in _camera_bar.get_children():
+		child.queue_free()
+	for preset_name: String in names:
+		var btn := Button.new()
+		btn.text = preset_name
+		btn.toggle_mode = true
+		btn.button_pressed = (preset_name == current)
+		btn.pressed.connect(_on_camera_preset_pressed.bind(preset_name))
+		_camera_bar.add_child(btn)
+
+
+## Обновляет выделение активной кнопки пресета.
+func update_camera_preset(active_name: String) -> void:
+	for child: Node in _camera_bar.get_children():
+		if child is Button:
+			var btn: Button = child as Button
+			btn.button_pressed = (btn.text == active_name)
+
 # --- Приватные методы ---
 
-## Обновляет визуал кулдауна.
+## Обновляет стрелки-индикаторы для книг за экраном.
+func _update_book_arrows() -> void:
+	if _camera == null:
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+
+	for i: int in range(_tracked_books.size()):
+		if i >= _book_arrows.size():
+			break
+		var book: Node3D = _tracked_books[i]
+		var arrow: Label = _book_arrows[i]
+
+		if not is_instance_valid(book) or not book.visible:
+			arrow.visible = false
+			continue
+
+		# Проецируем 3D позицию книги на экран
+		var screen_pos: Vector2 = _camera.unproject_position(book.global_position)
+		var is_behind: bool = _camera.is_position_behind(book.global_position)
+
+		# Проверяем, на экране ли книга
+		var margin: float = ARROW_MARGIN
+		var on_screen: bool = not is_behind and screen_pos.x > margin and screen_pos.x < viewport_size.x - margin and screen_pos.y > margin and screen_pos.y < viewport_size.y - margin
+
+		if on_screen:
+			arrow.visible = false
+			continue
+
+		# Книга за экраном — показываем стрелку на границе
+		arrow.visible = true
+
+		# Если за камерой — инвертируем
+		if is_behind:
+			screen_pos = viewport_size - screen_pos
+
+		# Направление от центра экрана к книге
+		var center: Vector2 = viewport_size / 2.0
+		var dir: Vector2 = (screen_pos - center).normalized()
+
+		# Находим точку на границе экрана
+		var edge_pos: Vector2 = center
+		var half: Vector2 = (viewport_size / 2.0) - Vector2(margin, margin)
+		if absf(dir.x) > 0.001:
+			var t_x: float = half.x / absf(dir.x)
+			var t_y: float = half.y / absf(dir.y) if absf(dir.y) > 0.001 else INF
+			var t: float = minf(t_x, t_y)
+			edge_pos = center + dir * t
+		elif absf(dir.y) > 0.001:
+			edge_pos = center + dir * (half.y / absf(dir.y))
+
+		# Угол стрелки
+		var angle: float = dir.angle()
+		arrow.rotation = angle
+		arrow.position = edge_pos - arrow.size / 2.0
+
+
+## Обновляет визуал кулдауна — заливка растёт снизу вверх на кнопке.
 func _update_dash_cooldown_display(remaining: float, total: float) -> void:
-	_dash_cooldown_bar.max_value = total
-	_dash_cooldown_bar.value = total - remaining
 	_dash_button.disabled = remaining > 0.0
+	if total <= 0.0:
+		_dash_cooldown_fill.anchor_top = 1.0
+		return
+	var progress: float = 1.0 - (remaining / total)  # 0 → 1 по мере готовности
+	_dash_cooldown_fill.anchor_top = 1.0 - progress
 	if remaining > 0.0:
-		_dash_cooldown_label.text = "%1.0f" % ceilf(remaining)
+		_dash_button.text = "Рывок\n%1.0f" % ceilf(remaining)
 	else:
-		_dash_cooldown_label.text = "Рывок"
+		_dash_button.text = "Рывок"
 
 
 ## Возвращает русское название стихии.
@@ -82,6 +218,49 @@ func _element_name(element: ElementTable.Element) -> String:
 			return "Металл"
 	return "—"
 
+
+## Окрашивает фон ячейки стихии.
+func _set_slot_color(color: Color) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	_element_slot.add_theme_stylebox_override("panel", style)
+
+
+## Возвращает цвет стихии.
+func _element_color(element: ElementTable.Element) -> Color:
+	match element:
+		ElementTable.Element.FIRE:
+			return Color(0.9, 0.2, 0.1)
+		ElementTable.Element.WATER:
+			return Color(0.1, 0.4, 0.9)
+		ElementTable.Element.TREE:
+			return Color(0.2, 0.7, 0.2)
+		ElementTable.Element.EARTH:
+			return Color(0.6, 0.4, 0.2)
+		ElementTable.Element.METAL:
+			return Color(0.7, 0.7, 0.7)
+	return Color.WHITE
+
+
+## Возвращает эмодзи стихии.
+func _element_emoji(element: ElementTable.Element) -> String:
+	match element:
+		ElementTable.Element.FIRE:
+			return "🔥"
+		ElementTable.Element.WATER:
+			return "💧"
+		ElementTable.Element.TREE:
+			return "🌿"
+		ElementTable.Element.EARTH:
+			return "🪨"
+		ElementTable.Element.METAL:
+			return "⚙️"
+	return "?"
+
 # --- Колбеки сигналов ---
 
 func _on_zone_button_pressed() -> void:
@@ -90,3 +269,11 @@ func _on_zone_button_pressed() -> void:
 
 func _on_dash_button_pressed() -> void:
 	dash_button_pressed.emit()
+
+
+func _on_restart_button_pressed() -> void:
+	restart_pressed.emit()
+
+
+func _on_camera_preset_pressed(preset_name: String) -> void:
+	camera_preset_selected.emit(preset_name)

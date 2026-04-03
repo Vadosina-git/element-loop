@@ -1,16 +1,17 @@
-[gd_scene load_steps=2 format=3 uid="uid://dhud00001"]
+[gd_scene load_steps=3 format=3 uid="uid://dhud00001"]
 
 [ext_resource type="Script" path="res://src/ui/hud/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://src/ui/hud/element_wheel.gd" id="2_wheel"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchors_preset = 0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = 300.0
-offset_bottom = 100.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 600.0
+offset_bottom = 250.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
 layout_mode = 2
@@ -18,12 +19,60 @@ layout_mode = 2
 [node name="HPLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 80
 text = "HP: 2"
 
-[node name="ElementLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="ElementWheel" type="Control" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -385.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = 385.0
+grow_horizontal = 0
+mouse_filter = 2
+script = ExtResource("2_wheel")
+
+[node name="ElementContainer" type="VBoxContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 15.0
+offset_right = 120.0
+offset_bottom = 200.0
+grow_horizontal = 2
+theme_override_constants/separation = 4
+
+[node name="ElementTitle" type="Label" parent="ElementContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 0.8)
+text = "СТИХИЯ"
+horizontal_alignment = 1
+
+[node name="ElementSlot" type="PanelContainer" parent="ElementContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Стихия: —"
+custom_minimum_size = Vector2(100, 100)
+
+[node name="ElementIcon" type="Label" parent="ElementContainer/ElementSlot"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+theme_override_colors/font_color = Color(0.35, 0.35, 0.35, 0.6)
+text = "?"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ElementName" type="Label" parent="ElementContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.6)
+text = "—"
+horizontal_alignment = 1
 
 [node name="ZoneButton" type="Button" parent="."]
 unique_name_in_owner = true
@@ -32,12 +81,13 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -120.0
-offset_top = -120.0
+offset_left = -320.0
+offset_top = -320.0
 offset_right = -20.0
 offset_bottom = -20.0
 grow_horizontal = 0
 grow_vertical = 0
+theme_override_font_sizes/font_size = 60
 text = "Зона"
 
 [node name="DashButton" type="Button" parent="."]
@@ -47,35 +97,72 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -120.0
-offset_top = -230.0
+offset_left = -320.0
+offset_top = -650.0
 offset_right = -20.0
-offset_bottom = -130.0
+offset_bottom = -350.0
 grow_horizontal = 0
 grow_vertical = 0
+clip_contents = true
+theme_override_font_sizes/font_size = 60
 text = "Рывок"
 
-[node name="DashCooldownContainer" type="MarginContainer" parent="."]
-anchors_preset = 2
+[node name="CooldownFill" type="ColorRect" parent="DashButton"]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_left = 0.0
 anchor_top = 1.0
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = -80.0
-offset_right = 80.0
-offset_bottom = -10.0
+offset_top = 0.0
 grow_vertical = 0
+mouse_filter = 2
+color = Color(0.2, 0.5, 0.9, 0.35)
 
-[node name="DashCooldownBar" type="TextureProgressBar" parent="DashCooldownContainer"]
+[node name="CameraBar" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
-layout_mode = 2
-max_value = 5.0
-value = 5.0
-fill_mode = 4
-nine_patch_stretch = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -400.0
+offset_top = -80.0
+offset_right = 400.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 1
+theme_override_constants/separation = 16
 
-[node name="DashCooldownLabel" type="Label" parent="DashCooldownContainer"]
+[node name="GameOverPanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -200.0
+offset_right = 350.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="GameOverPanel"]
 layout_mode = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="GameOverLabel" type="Label" parent="GameOverPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 100
+text = "GAME OVER"
 horizontal_alignment = 1
 vertical_alignment = 1
-text = "Рывок"
+
+[node name="RestartButton" type="Button" parent="GameOverPanel/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 60
+text = "Перезапуск (R)"

@@ -16,6 +16,16 @@ signal element_picked(element: ElementTable.Element)
 const HOLD_DURATION: float = 1.0
 const RESPAWN_DELAY: float = 2.0
 const INTERACTION_RADIUS: float = 1.5
+## Минимальное время жизни книги до автоисчезновения.
+const AUTO_VANISH_MIN: float = 8.0
+## Максимальное время жизни книги до автоисчезновения.
+const AUTO_VANISH_MAX: float = 16.0
+## Отступ от стен при случайном спавне.
+const SPAWN_MARGIN: float = 1.5
+## За сколько секунд до исчезновения начинать мигание.
+const BLINK_START: float = 2.0
+## Частота мигания (раз в секунду).
+const BLINK_SPEED: float = 8.0
 
 # --- Приватные переменные ---
 
@@ -24,11 +34,16 @@ var _hold_timer: float = 0.0
 var _is_holding: bool = false
 var _respawn_timer: float = 0.0
 var _player_in_range: bool = false
+var _vanish_timer: float = 0.0
+var _arena_size: Vector2 = Vector2(36.0, 54.0)
 
 # --- @onready переменные ---
 
 @onready var _area: Area3D = $Area3D
 @onready var _mesh: MeshInstance3D = $MeshInstance3D
+var _label: Label3D = null
+var _loader_mesh: MeshInstance3D = null
+var _loader_material: ShaderMaterial = null
 
 
 # --- Встроенные колбеки ---
@@ -36,8 +51,10 @@ var _player_in_range: bool = false
 func _ready() -> void:
 	_setup_visual()
 	_setup_collision()
+	_setup_loader()
 	_area.body_entered.connect(_on_body_entered)
 	_area.body_exited.connect(_on_body_exited)
+	_reset_vanish_timer()
 
 
 func _process(delta: float) -> void:
@@ -47,10 +64,27 @@ func _process(delta: float) -> void:
 			_respawn()
 		return
 
+	# Автоисчезновение — книга пропадает и респаунится в новом месте
+	_vanish_timer -= delta
+	if _vanish_timer <= 0.0:
+		_set_visual_visible(true)
+		_vanish_and_relocate()
+		return
+
+	# Мигание перед исчезновением
+	if _vanish_timer <= BLINK_START:
+		var blink_on: bool = fmod(_vanish_timer * BLINK_SPEED, 1.0) > 0.5
+		_set_visual_visible(blink_on)
+	else:
+		_set_visual_visible(true)
+
 	if _is_holding and _player_in_range:
 		_hold_timer += delta
+		_update_loader(_hold_timer / HOLD_DURATION)
 		if _hold_timer >= HOLD_DURATION:
 			_activate()
+	else:
+		_update_loader(0.0)
 
 
 # --- Публичные методы ---
@@ -70,16 +104,29 @@ func stop_hold() -> void:
 
 # --- Приватные методы ---
 
-## Настраивает визуал книги (коричневый прямоугольник).
+## Настраивает визуал книги (столик из KayKit + подпись).
 func _setup_visual() -> void:
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.5, 0.1, 0.4)
-	_mesh.mesh = mesh
-	_mesh.position.y = 0.5
+	var table_mesh: Mesh = load("res://assets/kaykit_prototype/table_medium.obj") as Mesh
+	if table_mesh != null:
+		_mesh.mesh = table_mesh
+		_mesh.scale = Vector3(0.4, 0.4, 0.4)  # Уменьшаем до разумного размера
+		_mesh.position.y = 0.0
+	else:
+		# Фоллбек — простой бокс
+		var box := BoxMesh.new()
+		box.size = Vector3(0.5, 0.1, 0.4)
+		_mesh.mesh = box
+		_mesh.position.y = 0.5
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.5, 0.3)
-	_mesh.material_override = material
+	# Подпись над книгой
+	_label = Label3D.new()
+	_label.text = "Книга"
+	_label.font_size = 48
+	_label.position.y = 1.0
+	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_label.modulate = Color(0.9, 0.8, 0.4)
+	_label.no_depth_test = true
+	add_child(_label)
 
 
 ## Настраивает зону взаимодействия (сфера).
@@ -96,12 +143,72 @@ func _setup_collision() -> void:
 	_area.collision_mask = 1  # Игрок на слое 1
 
 
+## Создаёт круговой лоадер на земле под книгой.
+func _setup_loader() -> void:
+	_loader_mesh = MeshInstance3D.new()
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(1.6, 1.6)
+	_loader_mesh.mesh = mesh
+	_loader_mesh.position.y = 0.02
+	_loader_mesh.visible = false
+
+	var shader := Shader.new()
+	shader.code = "
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+
+uniform float progress : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 ring_color : source_color = vec4(0.9, 0.8, 0.3, 0.8);
+uniform float ring_width = 0.08;
+uniform float ring_radius = 0.4;
+
+void fragment() {
+	vec2 uv_centered = UV - vec2(0.5);
+	float dist = length(uv_centered);
+	float angle = atan(uv_centered.x, uv_centered.y);
+	float normalized_angle = (angle + 3.14159) / (2.0 * 3.14159);
+
+	float inner = ring_radius - ring_width;
+	float outer = ring_radius;
+	float ring_mask = step(inner, dist) * step(dist, outer);
+
+	float progress_mask = step(normalized_angle, progress);
+
+	float alpha = ring_mask * progress_mask * ring_color.a;
+	ALBEDO = ring_color.rgb;
+	ALPHA = alpha;
+}
+"
+	_loader_material = ShaderMaterial.new()
+	_loader_material.shader = shader
+	_loader_material.set_shader_parameter("progress", 0.0)
+	_loader_material.set_shader_parameter("ring_color", Color(0.9, 0.8, 0.3, 0.8))
+
+	_loader_mesh.material_override = _loader_material
+	add_child(_loader_mesh)
+
+
+## Обновляет прогресс кругового лоадера (0.0–1.0).
+func _update_loader(progress: float) -> void:
+	if _loader_mesh == null:
+		return
+	if progress > 0.0:
+		_loader_mesh.visible = true
+		_loader_material.set_shader_parameter("progress", clampf(progress, 0.0, 1.0))
+	else:
+		_loader_mesh.visible = false
+
+
 ## Активирует книгу: скрывает, выдаёт случайную стихию.
 func _activate() -> void:
 	_is_active = false
 	_is_holding = false
 	_hold_timer = 0.0
+	_player_in_range = false
 	_mesh.visible = false
+	if _label != null:
+		_label.visible = false
+	_update_loader(0.0)
 
 	var random_element: ElementTable.Element = _get_random_element()
 	element_picked.emit(random_element)
@@ -109,11 +216,55 @@ func _activate() -> void:
 	_respawn_timer = RESPAWN_DELAY
 
 
-## Респаунит книгу: показывает и делает активной.
+## Респаунит книгу в новой случайной точке.
 func _respawn() -> void:
 	_is_active = true
 	_mesh.visible = true
+	if _label != null:
+		_label.visible = true
 	_respawn_timer = 0.0
+	_move_to_random_position()
+	_reset_vanish_timer()
+
+
+## Книга исчезает сама (таймер истёк) и перемещается.
+func _vanish_and_relocate() -> void:
+	_is_active = false
+	_is_holding = false
+	_hold_timer = 0.0
+	_player_in_range = false
+	_mesh.visible = false
+	if _label != null:
+		_label.visible = false
+	_update_loader(0.0)
+	_respawn_timer = RESPAWN_DELAY
+
+
+## Перемещает книгу в случайную позицию, не пересекающуюся с камнями.
+func _move_to_random_position() -> void:
+	var arena: ArenaView = get_parent() as ArenaView
+	if arena != null:
+		position = arena.get_safe_spawn_position()
+	else:
+		var half_x: float = _arena_size.x / 2.0 - SPAWN_MARGIN
+		var half_z: float = _arena_size.y / 2.0 - SPAWN_MARGIN
+		position = Vector3(
+			randf_range(-half_x, half_x),
+			0.0,
+			randf_range(-half_z, half_z),
+		)
+
+
+## Переключает видимость меша и подписи.
+func _set_visual_visible(visible_flag: bool) -> void:
+	_mesh.visible = visible_flag
+	if _label != null:
+		_label.visible = visible_flag
+
+
+## Сбрасывает таймер автоисчезновения на случайное значение.
+func _reset_vanish_timer() -> void:
+	_vanish_timer = randf_range(AUTO_VANISH_MIN, AUTO_VANISH_MAX)
 
 
 ## Возвращает случайную стихию из пяти.
@@ -133,6 +284,7 @@ func _get_random_element() -> ElementTable.Element:
 func _on_body_entered(body: Node3D) -> void:
 	if body is PlayerCharacter:
 		_player_in_range = true
+		start_hold()
 
 
 func _on_body_exited(body: Node3D) -> void:

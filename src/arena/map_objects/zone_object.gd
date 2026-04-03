@@ -57,7 +57,7 @@ func setup(p_element: ElementTable.Element, p_position: Vector3) -> void:
 
 # --- Приватные методы ---
 
-## Настраивает визуал зоны (полупрозрачный цилиндр).
+## Настраивает визуал зоны (полупрозрачный цилиндр + подпись стихии).
 func _setup_visual() -> void:
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = zone_radius
@@ -72,6 +72,32 @@ func _setup_visual() -> void:
 	material.albedo_color = color
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mesh.material_override = material
+
+	# Подпись стихии над зоной
+	var label := Label3D.new()
+	label.text = _get_element_name()
+	label.font_size = 48
+	label.position.y = 0.6
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = ELEMENT_COLORS.get(element, Color.WHITE)
+	label.no_depth_test = true
+	add_child(label)
+
+
+## Возвращает русское название стихии.
+func _get_element_name() -> String:
+	match element:
+		ElementTable.Element.FIRE:
+			return "Огонь"
+		ElementTable.Element.WATER:
+			return "Вода"
+		ElementTable.Element.TREE:
+			return "Дерево"
+		ElementTable.Element.EARTH:
+			return "Земля"
+		ElementTable.Element.METAL:
+			return "Металл"
+	return "?"
 
 
 ## Настраивает коллизию для обнаружения врагов.
