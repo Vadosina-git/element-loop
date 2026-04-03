@@ -24,8 +24,11 @@ jobs:
 
       - name: Setup export templates
         run: |
-          mkdir -p /root/.local/share/godot/export_templates/4.6.1.stable
-          mv /root/.local/share/godot/templates/4.6.1.stable/* /root/.local/share/godot/export_templates/4.6.1.stable/ || true
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/4.6.1.stable"
+          mkdir -p "$TEMPLATES_DIR"
+          cp /root/.local/share/godot/export_templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || \
+          cp /root/.local/share/godot/templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || \
+          echo "Searching for templates..." && find / -name "web_nothreads_release.zip" 2>/dev/null | head -5
 
       - name: Export to Web
         run: |
