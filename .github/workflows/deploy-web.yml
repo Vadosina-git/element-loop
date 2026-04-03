@@ -26,17 +26,32 @@ jobs:
         run: |
           TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/4.6.1.stable"
           mkdir -p "$TEMPLATES_DIR"
-          cp /root/.local/share/godot/export_templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || \
-          cp /root/.local/share/godot/templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || \
-          echo "Searching for templates..." && find / -name "web_nothreads_release.zip" 2>/dev/null | head -5
+          cp /root/.local/share/godot/export_templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || true
+          ls -la "$TEMPLATES_DIR/" | head -5
 
-      - name: Import project assets
-        run: godot --headless --import 2>&1 || true
+      - name: Debug - list preset and check
+        run: |
+          cat export_presets.cfg
+          echo "---"
+          godot --headless --quit 2>&1 || true
 
       - name: Export to Web
         run: |
           mkdir -p builds/web
-          godot --headless --export-release "Web" builds/web/index.html
+          godot --headless -v --export-release "Web" builds/web/index.html 2>&1 || true
+          echo "--- Build dir contents ---"
+          ls -la builds/web/ || true
+
+      - name: Check if export succeeded
+        run: |
+          if [ ! -f builds/web/index.html ]; then
+            echo "Export failed - trying with debug export"
+            godot --headless -v --export-debug "Web" builds/web/index.html 2>&1 || true
+          fi
+          if [ ! -f builds/web/index.html ]; then
+            echo "FATAL: Export failed"
+            exit 1
+          fi
 
       - name: Add coi-serviceworker for SharedArrayBuffer
         run: |
