@@ -41,8 +41,10 @@ jobs:
       - name: Add coi-serviceworker
         run: |
           cd builds/web
-          wget -q https://raw.githubusercontent.com/niccokunzmann/coi-serviceworker/main/coi-serviceworker.min.js -O coi-serviceworker.min.js
-          sed -i 's|<head>|<head><script src="coi-serviceworker.min.js"></script>|' index.html
+          wget -q https://raw.githubusercontent.com/niccokunzmann/coi-serviceworker/main/coi-serviceworker.min.js -O coi-serviceworker.min.js || curl -sL https://raw.githubusercontent.com/niccokunzmann/coi-serviceworker/main/coi-serviceworker.min.js -o coi-serviceworker.min.js || true
+          if [ -s coi-serviceworker.min.js ]; then
+            sed -i 's|<head>|<head><script src="coi-serviceworker.min.js"></script>|' index.html
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
