@@ -38,7 +38,7 @@ const ELEMENT_ICONS: Dictionary = {
 @export var move_speed: float = 2.33
 @export var attack_range: float = 1.0
 @export var attack_damage: int = 1
-@export var detection_range: float = 6.0
+@export var detection_range: float = 2.0
 
 # --- Публичные переменные ---
 
