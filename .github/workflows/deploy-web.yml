@@ -22,38 +22,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup export templates
+      - name: Setup
         run: |
           TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/4.6.1.stable"
           mkdir -p "$TEMPLATES_DIR"
           cp /root/.local/share/godot/export_templates/4.6.1.stable/* "$TEMPLATES_DIR/" 2>/dev/null || true
-          ls -la "$TEMPLATES_DIR/" | head -5
+          mkdir -p builds/web
 
-      - name: Debug - list preset and check
+      - name: Write export preset
         run: |
-          cat export_presets.cfg
-          echo "---"
-          godot --headless --quit 2>&1 || true
+          python3 -c "
+          lines = [
+            '[preset.0]', '',
+            'name=\"Web\"',
+            'platform=\"Web\"',
+            'runnable=true',
+            'dedicated_server=false',
+            'custom_features=\"\"',
+            'export_filter=\"all_resources\"',
+            'include_filter=\"\"',
+            'exclude_filter=\"\"',
+            'export_path=\"builds/web/index.html\"',
+            'encryption_include_filters=\"\"',
+            'encryption_exclude_filters=\"\"',
+            'encrypt_pck=false',
+            'encrypt_directory=false',
+            'script_export_mode=2', '',
+            '[preset.0.options]', '',
+            'custom_template/debug=\"\"',
+            'custom_template/release=\"\"',
+            'variant/extensions_support=false',
+            'variant/thread_support=false',
+            'vram_texture_compression/for_desktop=true',
+            'vram_texture_compression/for_mobile=true',
+            'html/export_icon=true',
+            'html/custom_html_shell=\"\"',
+            'html/head_include=\"\"',
+            'html/canvas_resize_policy=2',
+            'html/focus_canvas_on_start=true',
+            'html/experimental_virtual_keyboard=false',
+            'progressive_web_app/enabled=false',
+          ]
+          with open('export_presets.cfg', 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+          "
 
       - name: Export to Web
-        run: |
-          mkdir -p builds/web
-          godot --headless -v --export-release "Web" builds/web/index.html 2>&1 || true
-          echo "--- Build dir contents ---"
-          ls -la builds/web/ || true
+        run: godot --headless -v --export-release "Web" builds/web/index.html 2>&1; ls -la builds/web/
 
-      - name: Check if export succeeded
-        run: |
-          if [ ! -f builds/web/index.html ]; then
-            echo "Export failed - trying with debug export"
-            godot --headless -v --export-debug "Web" builds/web/index.html 2>&1 || true
-          fi
-          if [ ! -f builds/web/index.html ]; then
-            echo "FATAL: Export failed"
-            exit 1
-          fi
+      - name: Verify export
+        run: test -f builds/web/index.html || exit 1
 
-      - name: Add coi-serviceworker for SharedArrayBuffer
+      - name: Add coi-serviceworker
         run: |
           cd builds/web
           wget -q https://raw.githubusercontent.com/niccokunzmann/coi-serviceworker/main/coi-serviceworker.min.js -O coi-serviceworker.min.js
