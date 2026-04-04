@@ -19,33 +19,35 @@ const UNICODE: Dictionary = {
 	ElementTable.Element.METAL: "◆",
 }
 
-static var _is_web: bool = OS.get_name() == "Web"
+
+static func _is_web() -> bool:
+	return OS.has_feature("web")
 
 
 static func get_icon(element: ElementTable.Element) -> String:
-	if _is_web:
+	if _is_web():
 		return UNICODE.get(element, "?") as String
 	return EMOJI.get(element, "?") as String
 
 
 static func get_heart() -> String:
-	return "♥" if _is_web else "❤️"
+	return "♥" if _is_web() else "❤️"
 
 
 static func get_heart_broken() -> String:
-	return "♡" if _is_web else "💔"
+	return "♡" if _is_web() else "💔"
 
 
 static func get_book_arrow() -> String:
-	return "► Книга" if _is_web else "📖 ➤"
+	return "► Книга" if _is_web() else "📖 ➤"
 
 
 static func get_victory_text() -> String:
-	return "*** ПОБЕДА! ***" if _is_web else "🎉 ПОБЕДА! 🎉"
+	return "*** ПОБЕДА! ***" if _is_web() else "🎉 ПОБЕДА! 🎉"
 
 
 ## Список иконок для колеса стихий (порядок: Water, Fire, Tree, Earth, Metal).
 static func get_wheel_icons() -> Array[String]:
-	if _is_web:
+	if _is_web():
 		return ["●", "▲", "♣", "■", "◆"]
 	return ["💧", "🔥", "🌿", "🪨", "⚙️"]
