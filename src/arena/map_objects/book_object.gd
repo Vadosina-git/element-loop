@@ -111,14 +111,33 @@ func _setup_visual() -> void:
 	var table_mesh: Mesh = load("res://assets/kaykit_prototype/table_medium.obj") as Mesh
 	if table_mesh != null:
 		_mesh.mesh = table_mesh
-		_mesh.scale = Vector3(0.4, 0.4, 0.4)  # Уменьшаем до разумного размера
+		_mesh.scale = Vector3(0.4, 0.4, 0.4)
 		_mesh.position.y = 0.0
 	else:
-		# Фоллбек — простой бокс
 		var box := BoxMesh.new()
 		box.size = Vector3(0.5, 0.1, 0.4)
 		_mesh.mesh = box
 		_mesh.position.y = 0.5
+
+	# Градиентная заливка: фиолетово-красный
+	var material := ShaderMaterial.new()
+	var shader := Shader.new()
+	shader.code = "
+shader_type spatial;
+
+uniform vec4 color_top : source_color = vec4(0.6, 0.1, 0.7, 1.0);
+uniform vec4 color_bottom : source_color = vec4(0.8, 0.1, 0.15, 1.0);
+
+void fragment() {
+	float t = clamp(UV.y, 0.0, 1.0);
+	vec3 col = mix(color_bottom.rgb, color_top.rgb, t);
+	ALBEDO = col;
+	METALLIC = 0.3;
+	ROUGHNESS = 0.5;
+}
+"
+	material.shader = shader
+	_mesh.material_override = material
 
 	# Подпись над книгой
 	_label = Label3D.new()

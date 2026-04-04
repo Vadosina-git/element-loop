@@ -25,6 +25,13 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="EnemyCount" type="Label" parent="HPContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 0.8)
+text = "Враги: 0"
+
 [node name="ElementWheel" type="Control" parent="."]
 unique_name_in_owner = true
 anchors_preset = 1
@@ -78,6 +85,38 @@ theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.6)
 text = "—"
 horizontal_alignment = 1
 
+[node name="CharSwitcher" type="HBoxContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -60.0
+offset_right = 320.0
+offset_bottom = -10.0
+grow_vertical = 0
+theme_override_constants/separation = 8
+
+[node name="PrevChar" type="Button" parent="CharSwitcher"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "<"
+
+[node name="CharName" type="Label" parent="CharSwitcher"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Скелет-Маг"
+horizontal_alignment = 1
+vertical_alignment = 1
+size_flags_horizontal = 3
+
+[node name="NextChar" type="Button" parent="CharSwitcher"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = ">"
+
 [node name="ZoneButton" type="Button" parent="."]
 unique_name_in_owner = true
 anchors_preset = 3
@@ -109,7 +148,8 @@ grow_horizontal = 0
 grow_vertical = 0
 clip_contents = true
 theme_override_font_sizes/font_size = 60
-text = "Рывок"
+text = "Рывок
+(SHIFT)"
 
 [node name="CooldownFill" type="ColorRect" parent="DashButton"]
 unique_name_in_owner = true

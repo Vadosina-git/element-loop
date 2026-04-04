@@ -227,8 +227,6 @@ func _is_position_safe(pos: Vector3) -> bool:
 func _setup_rocks() -> void:
 	var cube_mesh: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_A.obj") as Mesh
 	var cube_mesh_b: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_B.obj") as Mesh
-	var rock_material := StandardMaterial3D.new()
-	rock_material.albedo_color = Color(0.35, 0.3, 0.25)
 
 	var ridges: Array[MazeGenerator.Ridge] = MazeGenerator.generate(ARENA_SIZE, RIDGE_COUNT)
 
@@ -245,13 +243,11 @@ func _setup_rocks() -> void:
 			var gz: int = ridge.grid_z + (i if not ridge.horizontal else 0)
 			var world_pos: Vector3 = MazeGenerator.grid_to_world(gx, gz, ARENA_SIZE)
 
-			var cs: float = MazeGenerator.CELL_SIZE  # 1.0 — как тайл пола
-			var rock_scale: float = 0.25  # KayKit куб ~2 юнита * 0.25 = 0.5, на тайле 1.0
+			var cs: float = MazeGenerator.CELL_SIZE
+			var rock_scale: float = 0.25
 
-			# Визуал — чередуем два меша
 			var mesh_inst := MeshInstance3D.new()
 			mesh_inst.mesh = cube_mesh if (gx + gz) % 2 == 0 else cube_mesh_b
-			mesh_inst.material_override = rock_material
 			mesh_inst.position = world_pos
 			mesh_inst.scale = Vector3(rock_scale, rock_scale, rock_scale)
 			_rocks.add_child(mesh_inst)

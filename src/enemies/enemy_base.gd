@@ -55,6 +55,9 @@ var _detection_circle: MeshInstance3D = null
 var _pulse_circle: MeshInstance3D = null
 var _pulse_material: ShaderMaterial = null
 var _is_highlighted: bool = false
+var _element_texture: Texture2D = null
+var _alert_texture: Texture2D = null
+var _is_chasing_icon: bool = false
 var _agony_timer: float = 0.0
 var _agony_target_rotation: float = 0.0
 var _agony_jump_timer: float = 0.0
@@ -118,6 +121,9 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 
 	move_and_slide()
+
+	# Иконка: восклицательный знак при погоне, стихия при патруле
+	_update_chase_icon(is_aggressive)
 
 	# При столкновении с вертикальным препятствием — сменить направление
 	if is_moving:
@@ -243,6 +249,22 @@ func _process_death(delta: float) -> void:
 		_pulse_circle.visible = false
 
 
+## Переключает иконку над врагом: стихия ↔ восклицательный знак.
+func _update_chase_icon(is_aggressive: bool) -> void:
+	if _element_sprite == null:
+		return
+	if is_aggressive and not _is_chasing_icon:
+		_is_chasing_icon = true
+		if _alert_texture != null:
+			_element_sprite.texture = _alert_texture
+			_element_sprite.modulate = Color.WHITE
+	elif not is_aggressive and _is_chasing_icon:
+		_is_chasing_icon = false
+		if _element_texture != null:
+			_element_sprite.texture = _element_texture
+			_element_sprite.modulate = Color.WHITE
+
+
 ## Возвращает скорость с учётом модификаторов ярости и метки.
 func _get_modified_speed() -> float:
 	var speed: float = move_speed
@@ -255,11 +277,12 @@ func _get_modified_speed() -> float:
 
 ## Создаёт значок стихии над головой врага.
 func _setup_element_label() -> void:
-	var tex: Texture2D = ElementIcons.get_texture(element)
-	if tex != null:
+	_element_texture = ElementIcons.get_texture(element)
+	_alert_texture = ElementIcons.get_alert_texture()
+	if _element_texture != null:
 		_element_sprite = Sprite3D.new()
-		_element_sprite.texture = tex
-		_element_sprite.pixel_size = 0.005
+		_element_sprite.texture = _element_texture
+		_element_sprite.pixel_size = 0.00225
 		_element_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_element_sprite.no_depth_test = true
 		_element_sprite.position = Vector3(0.0, 1.2, 0.0)
@@ -395,12 +418,12 @@ func _animate(delta: float, is_moving: bool) -> void:
 
 		label_bounce = jump_height * 0.3
 	elif is_moving:
-		# Тряска-предупреждение перед атакой
-		_anim_time += delta * 30.0
-		_mesh.position.x = sin(_anim_time) * 0.05
-		_mesh.position.y = lerpf(_mesh.position.y, 0.0, delta * 8.0)
-		_mesh.rotation.x = lerpf(_mesh.rotation.x, 0.0, delta * 8.0)
-		label_shake_x = sin(_anim_time * 0.5) * 0.02
+		# Покачивание при ходьбе (медленнее, мягче)
+		_anim_time += delta * 6.0
+		_mesh.position.y = absf(sin(_anim_time)) * 0.08
+		_mesh.rotation.x = sin(_anim_time) * 0.06
+		_mesh.rotation.z = sin(_anim_time * 0.6) * 0.03
+		label_bounce = absf(sin(_anim_time * 0.5)) * 0.03
 	elif _ai.current_state == EnemyAI.State.ATTACK:
 		# Рывок вперёд при атаке
 		_mesh.rotation.x = -0.3

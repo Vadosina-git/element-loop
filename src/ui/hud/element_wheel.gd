@@ -80,7 +80,7 @@ func _draw() -> void:
 		_draw_arrow(from, to, color, width)
 
 	# Иконки стихий
-	var tex_size: float = ICON_SIZE * 1.4
+	var tex_size: float = ICON_SIZE * 1.44
 	for i: int in range(5):
 		var pos: Vector2 = positions[i]
 		var is_active: bool = (i == active_idx)

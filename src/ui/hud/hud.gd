@@ -17,6 +17,9 @@ signal restart_pressed
 ## Испускается при выборе пресета камеры.
 signal camera_preset_selected(preset_name: String)
 
+signal next_character_pressed
+signal prev_character_pressed
+
 # --- Константы ---
 
 const DASH_COOLDOWN_DEFAULT: float = 5.0
@@ -26,10 +29,10 @@ const ARROW_SIZE: float = 60.0
 # --- Приватные переменные ---
 
 var _camera: Camera3D = null
-var _book_arrows: Array[Label] = []
+var _book_arrows: Array[Control] = []
 var _tracked_books: Array[Node3D] = []
 var _tracked_enemies: Array[EnemyBase] = []
-var _enemy_arrows: Array[Label] = []
+var _enemy_arrows: Array[Control] = []
 var _current_element: int = -1
 var _element_texture_rect: TextureRect = null
 var _heart_labels: Array[Control] = []
@@ -48,6 +51,10 @@ var _last_hp: int = 2
 @onready var _game_over_panel: PanelContainer = %GameOverPanel
 @onready var _restart_button: Button = %RestartButton
 @onready var _camera_bar: HBoxContainer = %CameraBar
+@onready var _prev_char_btn: Button = %PrevChar
+@onready var _next_char_btn: Button = %NextChar
+@onready var _char_name_label: Label = %CharName
+@onready var _enemy_count_label: Label = %EnemyCount
 @onready var _element_wheel: ElementWheel = %ElementWheel
 
 # --- Встроенные колбеки ---
@@ -56,6 +63,8 @@ func _ready() -> void:
 	_zone_button.pressed.connect(_on_zone_button_pressed)
 	_dash_button.pressed.connect(_on_dash_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
+	_prev_char_btn.pressed.connect(func() -> void: prev_character_pressed.emit())
+	_next_char_btn.pressed.connect(func() -> void: next_character_pressed.emit())
 	update_hp(2)
 	update_element(-1)
 	_update_dash_cooldown_display(0.0, DASH_COOLDOWN_DEFAULT)
@@ -88,7 +97,7 @@ func update_hp(hp: int) -> void:
 	for i: int in range(hp):
 		var heart := TextureRect.new()
 		heart.texture = heart_tex
-		heart.custom_minimum_size = Vector2(64, 64)
+		heart.custom_minimum_size = Vector2(70, 70)
 		heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_hearts_row.add_child(heart)
 		_heart_labels.append(heart)
@@ -120,15 +129,25 @@ func update_element(element: int) -> void:
 			_element_texture_rect = TextureRect.new()
 			_element_texture_rect.texture = tex
 			_element_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			_element_texture_rect.layout_mode = 2
+			_element_texture_rect.anchors_preset = Control.PRESET_FULL_RECT
 			_element_slot.add_child(_element_texture_rect)
-		_element_name_label.text = ElementIcons.get_name(el)
+		_element_name_label.text = ElementIcons.get_element_name(el)
 		_element_name_label.add_theme_color_override("font_color", color)
 		_set_slot_color(Color(color.r, color.g, color.b, 0.3))
 		_zone_button.disabled = false
 	_current_element = element
 	_element_wheel.set_active_element(element)
 	_update_enemy_highlights()
+
+## Обновляет имя текущего персонажа.
+func update_character_name(char_name: String) -> void:
+	_char_name_label.text = char_name
+
+
+## Обновляет счётчик врагов.
+func update_enemy_count(count: int) -> void:
+	_enemy_count_label.text = "Враги: %d" % count
+
 
 ## Обновляет индикатор кулдауна рывка.
 func update_dash_cooldown(remaining: float, total: float) -> void:
@@ -139,16 +158,13 @@ func update_dash_cooldown(remaining: float, total: float) -> void:
 func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
 	_camera = camera
 	_tracked_books.clear()
-	for arrow: Label in _book_arrows:
+	for arrow: Control in _book_arrows:
 		arrow.queue_free()
 	_book_arrows.clear()
 
 	for book: BookObject in books:
 		_tracked_books.append(book)
-		var arrow := Label.new()
-		arrow.text = ElementIcons.get_book_arrow()
-		arrow.add_theme_font_size_override("font_size", 60)
-		arrow.visible = false
+		var arrow := _create_icon_arrow(ElementIcons.get_book_texture())
 		add_child(arrow)
 		_book_arrows.append(arrow)
 
@@ -156,13 +172,11 @@ func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
 ## Настраивает отслеживание врагов для подсветки уязвимых.
 func setup_enemy_tracking(enemies: Array[EnemyBase]) -> void:
 	_tracked_enemies = enemies
-	for arrow: Label in _enemy_arrows:
+	for arrow: Control in _enemy_arrows:
 		arrow.queue_free()
 	_enemy_arrows.clear()
 	for i: int in range(enemies.size()):
-		var arrow := Label.new()
-		arrow.text = "%s >>" % ElementIcons.get_name(enemies[i].element)
-		arrow.add_theme_font_size_override("font_size", 60)
+		var arrow := _create_icon_arrow(ElementIcons.get_texture(enemies[i].element))
 		arrow.visible = false
 		add_child(arrow)
 		_enemy_arrows.append(arrow)
@@ -174,7 +188,7 @@ func show_victory() -> void:
 	# Переиспользуем панель Game Over с другим текстом
 	var label: Label = _game_over_panel.get_node("VBoxContainer/GameOverLabel") as Label
 	if label != null:
-		label.text = ElementIcons.get_victory_text()
+		label.text = "*** ПОБЕДА! ***"
 
 
 ## Показывает экран Game Over.
@@ -208,7 +222,7 @@ func update_camera_preset(active_name: String) -> void:
 func _start_heart_death(source_heart: Control) -> void:
 	var dying := TextureRect.new()
 	dying.texture = ElementIcons.get_heart_broken_texture()
-	dying.custom_minimum_size = Vector2(64, 64)
+	dying.custom_minimum_size = Vector2(70, 70)
 	dying.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	dying.position = source_heart.global_position
 	dying.z_index = 10
@@ -231,7 +245,7 @@ func _update_dying_hearts(delta: float) -> void:
 		var s: float = lerpf(1.0, 2.5, progress)
 		ctrl.scale = Vector2(s, s)
 		ctrl.modulate.a = lerpf(1.0, 0.0, progress)
-		label.position.y = (data["start_pos"] as Vector2).y - progress * 40.0
+		ctrl.position.y = (data["start_pos"] as Vector2).y - progress * 40.0
 	for i: int in range(to_remove.size() - 1, -1, -1):
 		_dying_hearts.remove_at(to_remove[i])
 
@@ -245,7 +259,7 @@ func _update_book_arrows() -> void:
 	var cam_pos: Vector3 = _camera.global_position
 
 	# Скрываем все стрелки
-	for arrow: Label in _book_arrows:
+	for arrow: Control in _book_arrows:
 		arrow.visible = false
 
 	# Проверяем, есть ли хоть одна книга на экране
@@ -282,7 +296,7 @@ func _update_book_arrows() -> void:
 
 	# Показываем стрелку только на ближайшую
 	var book: Node3D = _tracked_books[closest_idx]
-	var arrow: Label = _book_arrows[closest_idx]
+	var arrow: Control = _book_arrows[closest_idx]
 	var screen_pos: Vector2 = _camera.unproject_position(book.global_position)
 	var is_behind: bool = _camera.is_position_behind(book.global_position)
 
@@ -304,6 +318,44 @@ func _update_book_arrows() -> void:
 
 	arrow.rotation = dir.angle()
 	arrow.position = edge_pos - arrow.size / 2.0
+
+
+## Создаёт стрелку-указатель: стрелка на краю экрана, иконка ближе к центру.
+func _create_icon_arrow(tex: Texture2D) -> Control:
+	var container := Control.new()
+	container.custom_minimum_size = Vector2(46, 24)
+	container.size = Vector2(46, 24)
+	container.pivot_offset = Vector2(23, 12)
+	container.visible = false
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Иконка (ближе к центру экрана, т.е. слева в контейнере)
+	var icon := TextureRect.new()
+	if tex != null:
+		icon.texture = tex
+	icon.anchor_left = 0.0
+	icon.anchor_top = 0.0
+	icon.anchor_right = 0.0
+	icon.anchor_bottom = 0.0
+	icon.offset_left = 0.0
+	icon.offset_top = 0.0
+	icon.offset_right = 24.0
+	icon.offset_bottom = 24.0
+	icon.stretch_mode = TextureRect.STRETCH_SCALE
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(icon)
+
+	# Стрелка (на краю, т.е. справа)
+	var arrow_label := Label.new()
+	arrow_label.text = ">"
+	arrow_label.add_theme_font_size_override("font_size", 20)
+	arrow_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.8))
+	arrow_label.position = Vector2(26, 0)
+	arrow_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(arrow_label)
+
+	return container
 
 
 ## Обновляет подсветку уязвимых врагов на поле.
@@ -331,7 +383,7 @@ func _update_enemy_arrows() -> void:
 		if i >= _enemy_arrows.size():
 			break
 		var enemy: EnemyBase = _tracked_enemies[i]
-		var arrow: Label = _enemy_arrows[i]
+		var arrow: Control = _enemy_arrows[i]
 
 		if not is_instance_valid(enemy):
 			arrow.visible = false
@@ -387,7 +439,7 @@ func _update_dash_cooldown_display(remaining: float, total: float) -> void:
 	if remaining > 0.0:
 		_dash_button.text = "Рывок\n%1.0f" % ceilf(remaining)
 	else:
-		_dash_button.text = "Рывок"
+		_dash_button.text = "Рывок\n(SHIFT)"
 
 
 ## Возвращает русское название стихии.

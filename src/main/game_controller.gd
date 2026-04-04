@@ -64,6 +64,11 @@ func _ready() -> void:
 	# Подключаем перезапуск
 	_hud.restart_pressed.connect(_on_restart_pressed)
 
+	# Подключаем переключение персонажа
+	_hud.next_character_pressed.connect(_player.next_character)
+	_hud.prev_character_pressed.connect(_player.prev_character)
+	_player.character_changed.connect(_hud.update_character_name)
+
 	# Подключаем пресеты камеры
 	_hud.camera_preset_selected.connect(_on_camera_preset_selected)
 	_hud.setup_camera_presets(_arena._camera.get_preset_names(), _arena._camera.current_preset)
@@ -85,6 +90,8 @@ func _ready() -> void:
 	_combat_logic.enemy_enraged.connect(_on_enemy_enraged)
 	_combat_logic.enemy_rage_expired.connect(_on_rage_expired)
 	_combat_logic.enemy_killed.connect(_on_enemy_killed)
+
+	_hud.update_enemy_count(_enemies.size())
 
 
 func _process(delta: float) -> void:
@@ -180,7 +187,8 @@ func _on_element_picked(element: ElementTable.Element) -> void:
 
 ## Нажата кнопка постановки зоны.
 func _on_zone_button_pressed() -> void:
-	_player.place_zone()
+	if not _player.place_zone():
+		_player.play_fail_joke()
 
 
 ## Игрок поставил зону: создаём объект на арене.
@@ -252,6 +260,7 @@ func _on_enemy_killed(enemy_id: int) -> void:
 		enemy.start_death()
 		_enemies.erase(enemy_id)
 	_remove_one_book()
+	_hud.update_enemy_count(_enemies.size())
 
 	# Проверка победы
 	if _enemies.is_empty():

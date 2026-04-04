@@ -11,10 +11,45 @@ signal hp_changed(new_hp: int)
 signal element_changed(new_element: int)
 signal zone_placed(element: int, position: Vector3)
 signal died()
+signal character_changed(char_name: String)
 signal dash_cooldown_changed(remaining: float, total: float)
 signal dash_started()
 
 # --- Константы ---
+const FAIL_JOKES: Array[String] = [
+	"Сначала книга!",
+	"Руки пустые...",
+	"Без стихии никак!",
+	"Книгу бы почитать...",
+	"Я забыл заклинание!",
+	"Нужна стихия!",
+	"Ловушка из чего?!",
+	"Воздух не ловит!",
+	"Эй, дай книгу!",
+	"Мана кончилась!",
+	"Чем кидаться-то?",
+	"Пустые карманы...",
+	"Сбегай за книгой!",
+	"Не готов ещё!",
+	"Без магии? Серьёзно?",
+	"Хотя бы камень...",
+	"Нужно зарядиться!",
+	"Фокус не удался!",
+	"Абракадабра... нет.",
+	"Ищи книгу, лентяй!",
+]
+
+const CHARACTERS: Array[Dictionary] = [
+	{"name": "Скелет-Маг", "path": "res://assets/kaykit_skeletons/Skeleton_Mage_Full.glb"},
+	{"name": "Рыцарь", "path": "res://assets/kaykit_skeletons/Knight.glb"},
+	{"name": "Варвар", "path": "res://assets/kaykit_skeletons/Barbarian.glb"},
+	{"name": "Маг", "path": "res://assets/kaykit_skeletons/Mage.glb"},
+	{"name": "Разбойник", "path": "res://assets/kaykit_skeletons/Rogue.glb"},
+	{"name": "Скелет-Воин", "path": "res://assets/kaykit_skeletons/Skeleton_Warrior.glb"},
+	{"name": "Скелет-Разбойник", "path": "res://assets/kaykit_skeletons/Skeleton_Rogue.glb"},
+	{"name": "Скелет-Миньон", "path": "res://assets/kaykit_skeletons/Skeleton_Minion.glb"},
+]
+
 const MOVE_SPEED: float = 3.33
 const MAX_HP: int = 2
 const DASH_DISTANCE: float = 3.0
@@ -31,7 +66,8 @@ var has_zone_charge: bool = false
 # --- Приватные переменные ---
 var _move_direction: Vector3 = Vector3.ZERO
 var _anim_time: float = 0.0
-var _mesh_node: MeshInstance3D = null
+var _mesh_node: Node3D = null
+var _anim_player: AnimationPlayer = null
 var _is_dashing: bool = false
 var _dash_timer: float = 0.0
 var _dash_cooldown_timer: float = 0.0
@@ -40,6 +76,16 @@ var _damage_flash_timer: float = 0.0
 var _is_dancing: bool = false
 var _dance_timer: float = 0.0
 var _original_color: Color = Color(0.3, 0.6, 0.9)
+var _target_rotation_y: float = 0.0
+var _character_index: int = 0
+var _is_placing_zone: bool = false
+var _place_zone_timer: float = 0.0
+var _joke_bubble: Label3D = null
+var _joke_timer: float = 0.0
+var _is_joking: bool = false
+const PLACE_ZONE_DURATION: float = 0.4
+const JOKE_DURATION: float = 1.5
+const ROTATION_SPEED: float = 12.0
 var _dash_start_pos: Vector3 = Vector3.ZERO
 var _dash_particles: GPUParticles3D = null
 
@@ -56,13 +102,8 @@ func _physics_process(delta: float) -> void:
 	# Победный танец
 	if _is_dancing:
 		_dance_timer += delta
-		# Вращение вокруг оси
-		rotation.y += delta * 8.0
-		# Прыжки
-		if _mesh_node != null:
-			var jump: float = absf(sin(_dance_timer * 5.0)) * 0.4
-			_mesh_node.position.y = jump
-			_mesh_node.rotation.z = sin(_dance_timer * 3.0) * 0.15
+		rotation.y += delta * 4.0
+		_play_anim("Cheer", 1.0)
 		return
 
 	# Обновляем кулдаун рывка
@@ -92,6 +133,46 @@ func _physics_process(delta: float) -> void:
 		_animate_damage_flash(delta)
 		return
 
+	# Плавный поворот
+	if _move_direction.length() > 0.1:
+		var angle_diff: float = wrapf(_target_rotation_y - rotation.y, -PI, PI)
+		rotation.y += angle_diff * ROTATION_SPEED * delta
+
+	# Анимация постановки ловушки — прыжок без остановки
+	if _is_placing_zone:
+		_place_zone_timer -= delta
+		if _place_zone_timer <= 0.0:
+			_is_placing_zone = false
+			if _mesh_node != null:
+				_mesh_node.position.y = 0.0
+			# Проигрываем анимацию приземления для плавного перехода
+			if _anim_player != null:
+				if _anim_player.has_animation("Jump_Land"):
+					var land_anim: Animation = _anim_player.get_animation("Jump_Land")
+					if land_anim != null:
+						land_anim.loop_mode = Animation.LOOP_NONE
+					_anim_player.speed_scale = 3.0
+					_anim_player.play("Jump_Land", 0.1)
+		elif _mesh_node != null:
+			# Параболический прыжок: быстро вверх, быстрее вниз
+			var progress: float = 1.0 - (_place_zone_timer / PLACE_ZONE_DURATION)
+			var jump_y: float = 1.2 * (1.0 - (2.0 * progress - 0.4) * (2.0 * progress - 0.4) / (0.6 * 0.6))
+			_mesh_node.position.y = maxf(0.0, jump_y)
+
+	# Таймер шуточного бабла
+	if _is_joking:
+		_joke_timer -= delta
+		if _joke_bubble != null:
+			# Всплывает вверх и затухает
+			_joke_bubble.position.y += delta * 0.5
+			if _joke_timer < 0.5:
+				_joke_bubble.modulate.a = _joke_timer / 0.5
+		if _joke_timer <= 0.0:
+			_is_joking = false
+			if _joke_bubble != null:
+				_joke_bubble.queue_free()
+				_joke_bubble = null
+
 	# Обычное движение
 	velocity = _move_direction * MOVE_SPEED
 	move_and_slide()
@@ -106,9 +187,7 @@ func _physics_process(delta: float) -> void:
 func set_move_direction(direction: Vector3) -> void:
 	if direction.length() > 0.1:
 		_move_direction = direction.normalized()
-		var look_target: Vector3 = global_position + _move_direction
-		look_target.y = global_position.y
-		look_at(look_target, Vector3.UP)
+		_target_rotation_y = atan2(_move_direction.x, _move_direction.z) + PI
 	else:
 		_move_direction = Vector3.ZERO
 
@@ -131,6 +210,11 @@ func place_zone() -> bool:
 	current_element = -1
 	zone_placed.emit(placed_element, placed_position)
 	element_changed.emit(current_element)
+	# Анимация постановки (только если не прыгаем)
+	if not _is_placing_zone:
+		_is_placing_zone = true
+		_place_zone_timer = PLACE_ZONE_DURATION
+		_start_jump_anim()
 	return true
 
 
@@ -182,6 +266,58 @@ func start_victory_dance() -> void:
 	velocity = Vector3.ZERO
 
 
+## Шуточная анимация при попытке поставить ловушку без стихии.
+func play_fail_joke() -> void:
+	if _is_placing_zone:
+		return
+	_is_joking = true
+	_is_placing_zone = true
+	_place_zone_timer = PLACE_ZONE_DURATION
+	_start_jump_anim()
+	_joke_timer = JOKE_DURATION
+
+	# Бабл с фразой — заменяем старый
+	if _joke_bubble != null:
+		_joke_bubble.queue_free()
+	_joke_bubble = Label3D.new()
+	_joke_bubble.text = FAIL_JOKES[randi() % FAIL_JOKES.size()]
+	_joke_bubble.font_size = 36
+	_joke_bubble.position = Vector3(0.0, 2.0, 0.0)
+	_joke_bubble.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_joke_bubble.no_depth_test = true
+	_joke_bubble.modulate = Color(1.0, 1.0, 0.6, 1.0)
+	_joke_bubble.outline_size = 8
+	_joke_bubble.outline_modulate = Color(0.0, 0.0, 0.0, 0.8)
+	add_child(_joke_bubble)
+
+
+## Переключает на следующего персонажа.
+func next_character() -> void:
+	_character_index = (_character_index + 1) % CHARACTERS.size()
+	_reload_character()
+
+
+## Переключает на предыдущего персонажа.
+func prev_character() -> void:
+	_character_index = (_character_index - 1 + CHARACTERS.size()) % CHARACTERS.size()
+	_reload_character()
+
+
+## Возвращает имя текущего персонажа.
+func get_character_name() -> String:
+	return CHARACTERS[_character_index]["name"] as String
+
+
+## Перезагружает модель текущего персонажа.
+func _reload_character() -> void:
+	if _mesh_node != null:
+		_mesh_node.queue_free()
+		_mesh_node = null
+		_anim_player = null
+	_setup_visual()
+	character_changed.emit(get_character_name())
+
+
 ## Возвращает true, если рывок на кулдауне.
 func is_dash_on_cooldown() -> bool:
 	return _dash_cooldown_timer > 0.0
@@ -189,20 +325,38 @@ func is_dash_on_cooldown() -> bool:
 
 # --- Приватные методы ---
 
-## Мигание красным при получении урона.
+## Мигание красным при получении урона (модуляция всей модели).
 func _animate_damage_flash(delta: float) -> void:
 	if _damage_flash_timer <= 0.0:
 		return
 	_damage_flash_timer -= delta
-	if _mesh_node == null or _mesh_node.material_override == null:
+	if _mesh_node == null:
 		return
-	var mat: StandardMaterial3D = _mesh_node.material_override as StandardMaterial3D
 	if _damage_flash_timer <= 0.0:
 		_damage_flash_timer = 0.0
-		mat.albedo_color = _original_color
+		_set_model_visibility(true)
 	else:
 		var blink: bool = fmod(_damage_flash_timer * 10.0, 1.0) > 0.5
-		mat.albedo_color = Color(1.0, 0.1, 0.1) if blink else _original_color
+		_set_model_visibility(blink)
+
+
+## Запускает анимацию прыжка один раз.
+func _start_jump_anim() -> void:
+	if _anim_player == null:
+		return
+	if not _anim_player.has_animation("Jump_Full_Short"):
+		return
+	var anim: Animation = _anim_player.get_animation("Jump_Full_Short")
+	if anim != null:
+		anim.loop_mode = Animation.LOOP_NONE
+	_anim_player.speed_scale = 3.0
+	_anim_player.play("Jump_Full_Short", 0.15)
+
+
+## Переключает видимость модели (для мигания при уроне).
+func _set_model_visibility(vis: bool) -> void:
+	if _mesh_node != null:
+		_mesh_node.visible = vis
 
 
 ## Создаёт систему частиц дыма для рывка.
@@ -248,25 +402,38 @@ func _setup_dash_particles() -> void:
 	add_child(_dash_particles)
 
 
-## Анимация ходьбы: покачивание и подпрыгивание.
-func _animate_walk(delta: float) -> void:
-	if _mesh_node == null:
+## Анимация ходьбы через AnimationPlayer.
+func _animate_walk(_delta: float) -> void:
+	if _anim_player == null:
 		return
 	var is_moving: bool = _move_direction.length() > 0.1
+
+	if _is_dancing:
+		return
+
+	if _is_placing_zone:
+		# Не перезапускаем — анимация играется один раз при старте прыжка
+		return
+
 	if is_moving:
-		_anim_time += delta * 10.0
-		# Подпрыгивание
-		var bounce: float = absf(sin(_anim_time)) * 0.15
-		_mesh_node.position.y = bounce
-		# Наклон вперёд-назад (покачивание)
-		_mesh_node.rotation.x = sin(_anim_time) * 0.1
-		# Покачивание влево-вправо
-		_mesh_node.rotation.z = sin(_anim_time * 0.5) * 0.05
+		_play_anim("Walking_A", 3.0)
 	else:
-		# Плавный возврат в исходное положение
-		_mesh_node.position.y = lerpf(_mesh_node.position.y, 0.0, delta * 10.0)
-		_mesh_node.rotation.x = lerpf(_mesh_node.rotation.x, 0.0, delta * 10.0)
-		_mesh_node.rotation.z = lerpf(_mesh_node.rotation.z, 0.0, delta * 10.0)
+		_play_anim("Unarmed_Idle", 1.0)
+
+
+## Проигрывает анимацию с заданной скоростью и плавным переходом.
+func _play_anim(anim_name: String, speed: float) -> void:
+	if _anim_player == null:
+		return
+	if not _anim_player.has_animation(anim_name):
+		return
+	_anim_player.speed_scale = speed
+	# Устанавливаем loop
+	var anim: Animation = _anim_player.get_animation(anim_name)
+	if anim != null and anim.loop_mode == Animation.LOOP_NONE:
+		anim.loop_mode = Animation.LOOP_LINEAR
+	if _anim_player.current_animation != anim_name:
+		_anim_player.play(anim_name, 0.15)
 
 
 ## Создаёт коллизию: капсула (radius=0.3, height=1.2).
@@ -280,25 +447,56 @@ func _setup_collision() -> void:
 	add_child(collision)
 
 
-## Создаёт визуал: капсула-меш (синий цвет).
+## Создаёт визуал: скелет-маг из KayKit Skeletons (GLB с анимациями).
 func _setup_visual() -> void:
-	var dummy_mesh: Mesh = load("res://assets/kaykit_prototype/Dummy_Base_Dummy_Body_Dummy_Head.obj") as Mesh
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 0.6, 0.9)
-	var mesh_instance := MeshInstance3D.new()
+	var char_path: String = CHARACTERS[_character_index]["path"] as String
+	var scene: PackedScene = load(char_path) as PackedScene
+	if scene != null:
+		var model: Node3D = scene.instantiate() as Node3D
+		model.scale = Vector3(0.5, 0.5, 0.5)
+		model.rotation.y = PI
+		_mesh_node = model
+		add_child(model)
 
-	if dummy_mesh != null:
-		mesh_instance.mesh = dummy_mesh
-		mesh_instance.scale = Vector3(0.5, 0.5, 0.5)
-		mesh_instance.position = Vector3(0.0, 0.0, 0.0)
-		mesh_instance.material_override = material
+		_anim_player = _find_anim_player(model)
+		if _anim_player != null:
+			# Скрываем оружие в руках
+			_hide_equipment(model)
+			# Устанавливаем blend time для плавных переходов
+			_anim_player.speed_scale = 1.0
 	else:
+		# Фоллбек
 		var capsule := CapsuleMesh.new()
 		capsule.radius = 0.3
 		capsule.height = 1.2
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color(0.3, 0.6, 0.9)
 		capsule.material = material
+		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.mesh = capsule
 		mesh_instance.position = Vector3(0.0, 0.6, 0.0)
+		_mesh_node = mesh_instance
+		add_child(mesh_instance)
 
-	_mesh_node = mesh_instance
-	add_child(mesh_instance)
+
+## Ищет AnimationPlayer рекурсивно в дереве нод.
+func _find_anim_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	for child: Node in node.get_children():
+		var found: AnimationPlayer = _find_anim_player(child)
+		if found != null:
+			return found
+	return null
+
+
+## Скрывает оружие/предметы в руках.
+func _hide_equipment(node: Node) -> void:
+	if node is BoneAttachment3D:
+		var bone_name: String = node.name.to_lower()
+		if bone_name.contains("handslot") or bone_name.contains("hand_slot"):
+			for child: Node in node.get_children():
+				if child is MeshInstance3D:
+					(child as MeshInstance3D).visible = false
+	for child: Node in node.get_children():
+		_hide_equipment(child)
