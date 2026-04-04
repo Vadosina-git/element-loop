@@ -12,11 +12,11 @@ const EMOJI: Dictionary = {
 }
 
 const UNICODE: Dictionary = {
-	ElementTable.Element.FIRE: "▲",
-	ElementTable.Element.WATER: "●",
-	ElementTable.Element.TREE: "♣",
-	ElementTable.Element.EARTH: "■",
-	ElementTable.Element.METAL: "◆",
+	ElementTable.Element.FIRE: "F",
+	ElementTable.Element.WATER: "W",
+	ElementTable.Element.TREE: "T",
+	ElementTable.Element.EARTH: "E",
+	ElementTable.Element.METAL: "M",
 }
 
 
@@ -31,15 +31,15 @@ static func get_icon(element: ElementTable.Element) -> String:
 
 
 static func get_heart() -> String:
-	return "♥" if _is_web() else "❤️"
+	return "<3" if _is_web() else "❤️"
 
 
 static func get_heart_broken() -> String:
-	return "♡" if _is_web() else "💔"
+	return "X" if _is_web() else "💔"
 
 
 static func get_book_arrow() -> String:
-	return "► Книга" if _is_web() else "📖 ➤"
+	return ">> Book" if _is_web() else "📖 ➤"
 
 
 static func get_victory_text() -> String:
@@ -49,5 +49,5 @@ static func get_victory_text() -> String:
 ## Список иконок для колеса стихий (порядок: Water, Fire, Tree, Earth, Metal).
 static func get_wheel_icons() -> Array[String]:
 	if _is_web():
-		return ["●", "▲", "♣", "■", "◆"]
+		return ["W", "F", "T", "E", "M"]
 	return ["💧", "🔥", "🌿", "🪨", "⚙️"]
