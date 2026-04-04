@@ -35,7 +35,9 @@ var _is_holding: bool = false
 var _respawn_timer: float = 0.0
 var _player_in_range: bool = false
 var _vanish_timer: float = 0.0
-var _arena_size: Vector2 = Vector2(36.0, 54.0)
+var _arena_size: Vector2 = Vector2(24.0, 36.0)
+## Callable для получения доступных стихий (контры живых врагов).
+var get_available_elements: Callable = Callable()
 
 # --- @onready переменные ---
 
@@ -267,8 +269,15 @@ func _reset_vanish_timer() -> void:
 	_vanish_timer = randf_range(AUTO_VANISH_MIN, AUTO_VANISH_MAX)
 
 
-## Возвращает случайную стихию из пяти.
+## Возвращает случайную контр-стихию для живых врагов.
 func _get_random_element() -> ElementTable.Element:
+	# Если есть callable — берём только контры живых врагов
+	if get_available_elements.is_valid():
+		var available: Array = get_available_elements.call()
+		if not available.is_empty():
+			return available[randi() % available.size()] as ElementTable.Element
+
+	# Фоллбек — все стихии
 	var elements: Array[ElementTable.Element] = [
 		ElementTable.Element.FIRE,
 		ElementTable.Element.WATER,

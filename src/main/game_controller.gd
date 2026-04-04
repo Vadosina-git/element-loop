@@ -26,7 +26,7 @@ var _enemies: Dictionary = {}  # {enemy_id: EnemyBase}
 var _active_zones: Array[ZoneObject] = []
 var _next_enemy_id: int = 1
 
-const ENEMY_COUNT: int = 20
+const ENEMY_COUNT: int = 13
 const SPAWN_MARGIN: float = 2.0
 
 
@@ -68,11 +68,12 @@ func _ready() -> void:
 	_hud.camera_preset_selected.connect(_on_camera_preset_selected)
 	_hud.setup_camera_presets(_arena._camera.get_preset_names(), _arena._camera.current_preset)
 
-	# Спавним книги и настраиваем индикаторы
+	# Спавним врагов и книги
+	_spawn_enemies()
 	_spawn_books()
 	_hud.setup_book_indicators(_books, _arena._camera)
 
-	# Настраиваем отслеживание врагов для подсветки
+	# Настраиваем отслеживание врагов для подсветки (после спавна!)
 	var enemy_list: Array[EnemyBase] = []
 	for eid: int in _enemies:
 		enemy_list.append(_enemies[eid] as EnemyBase)
@@ -84,9 +85,6 @@ func _ready() -> void:
 	_combat_logic.enemy_enraged.connect(_on_enemy_enraged)
 	_combat_logic.enemy_rage_expired.connect(_on_rage_expired)
 	_combat_logic.enemy_killed.connect(_on_enemy_killed)
-
-	# Спавним врагов
-	_spawn_enemies()
 
 
 func _process(delta: float) -> void:
@@ -135,7 +133,20 @@ func _spawn_books() -> void:
 		book.position = book_positions[i]
 		_arena.add_child(book)
 		book.element_picked.connect(_on_element_picked)
+		book.get_available_elements = _get_counter_elements
 		_books.append(book)
+
+
+## Возвращает контр-стихии для живых врагов (без дубликатов).
+func _get_counter_elements() -> Array:
+	var counters: Array = []
+	for eid: int in _enemies:
+		var enemy: EnemyBase = _enemies[eid] as EnemyBase
+		if is_instance_valid(enemy) and not enemy._is_dying:
+			var counter: ElementTable.Element = ElementTable.get_counter(enemy.element)
+			if counter not in counters:
+				counters.append(counter)
+	return counters
 
 
 ## Удаляет одну случайную книгу с поля.
@@ -160,6 +171,12 @@ func _get_enemy(enemy_id: int) -> EnemyBase:
 
 ## Удаляет старейшую зону при переполнении (FIFO).
 func _enforce_zone_limit() -> void:
+	# Чистим невалидные ссылки (зоны могут удалиться по таймеру)
+	var valid_zones: Array[ZoneObject] = []
+	for z: ZoneObject in _active_zones:
+		if is_instance_valid(z):
+			valid_zones.append(z)
+	_active_zones = valid_zones
 	while _active_zones.size() > ZoneLogic.MAX_ZONES:
 		var oldest: ZoneObject = _active_zones.pop_front()
 		if is_instance_valid(oldest):
@@ -244,9 +261,13 @@ func _on_rage_expired(enemy_id: int) -> void:
 func _on_enemy_killed(enemy_id: int) -> void:
 	var enemy: EnemyBase = _get_enemy(enemy_id)
 	if enemy != null:
-		enemy.queue_free()
+		enemy.start_death()
 		_enemies.erase(enemy_id)
 	_remove_one_book()
+
+	# Проверка победы
+	if _enemies.is_empty():
+		_on_victory()
 
 
 ## Враг испустил сигнал died (из EnemyBase.take_damage).
@@ -270,6 +291,18 @@ func _on_camera_preset_selected(preset_name: String) -> void:
 	_hud.update_camera_preset(preset_name)
 
 
+## Победа — все враги уничтожены.
+func _on_victory() -> void:
+	set_process(false)
+	_player.start_victory_dance()
+	# Показываем экран победы с задержкой (после анимации)
+	get_tree().create_timer(3.0).timeout.connect(_show_victory_screen)
+
+
+func _show_victory_screen() -> void:
+	_hud.show_victory()
+
+
 ## Игрок умер.
 func _on_player_died() -> void:
 	_hud.show_game_over()
@@ -281,8 +314,9 @@ func _on_restart_pressed() -> void:
 	get_tree().reload_current_scene()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event as InputEventKey
 		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_R:
 			_on_restart_pressed()
+			get_viewport().set_input_as_handled()

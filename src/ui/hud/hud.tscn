@@ -6,21 +6,24 @@
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="HPContainer" type="VBoxContainer" parent="."]
 anchors_preset = 0
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 600.0
-offset_bottom = 250.0
+offset_right = 500.0
+offset_bottom = 200.0
+theme_override_constants/separation = 4
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="HPTitle" type="Label" parent="HPContainer"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 48
+theme_override_colors/font_color = Color(0.8, 0.3, 0.3, 0.8)
+text = "ЖИЗНИ"
 
-[node name="HPLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="HeartsRow" type="HBoxContainer" parent="HPContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 80
-text = "HP: 2"
+theme_override_constants/separation = 12
 
 [node name="ElementWheel" type="Control" parent="."]
 unique_name_in_owner = true

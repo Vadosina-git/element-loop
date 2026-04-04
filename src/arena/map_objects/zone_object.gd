@@ -14,6 +14,10 @@ signal enemy_exited_zone(enemy: EnemyBase, zone: ZoneObject)
 
 # --- Константы ---
 
+const ZONE_LIFETIME: float = 7.0
+const BLINK_START: float = 2.0
+const BLINK_SPEED: float = 8.0
+
 ## Цвета стихий для визуального отображения зон.
 const ELEMENT_COLORS: Dictionary = {
 	ElementTable.Element.FIRE: Color(0.9, 0.2, 0.1),
@@ -27,6 +31,7 @@ const ELEMENT_COLORS: Dictionary = {
 
 var element: ElementTable.Element = ElementTable.Element.FIRE
 var zone_radius: float = 1.5
+var _lifetime_timer: float = 0.0
 
 # --- @onready переменные ---
 
@@ -44,6 +49,19 @@ func _ready() -> void:
 	_setup_collision()
 	_area.body_entered.connect(_on_body_entered)
 	_area.body_exited.connect(_on_body_exited)
+	_lifetime_timer = ZONE_LIFETIME
+
+
+func _process(delta: float) -> void:
+	_lifetime_timer -= delta
+
+	# Мигание перед исчезновением
+	if _lifetime_timer <= BLINK_START and _lifetime_timer > 0.0:
+		var blink_on: bool = fmod(_lifetime_timer * BLINK_SPEED, 1.0) > 0.5
+		_mesh.visible = blink_on
+	elif _lifetime_timer <= 0.0:
+		queue_free()
+		return
 
 
 # --- Публичные методы ---

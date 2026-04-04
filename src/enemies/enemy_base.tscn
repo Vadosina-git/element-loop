@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://src/enemies/enemy_ai.gd" id="2_enemy_ai"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-radius = 0.35
+radius = 0.2
 height = 0.8
 
 [node name="EnemyBase" type="CharacterBody3D"]

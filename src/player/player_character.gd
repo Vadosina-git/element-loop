@@ -37,6 +37,8 @@ var _dash_timer: float = 0.0
 var _dash_cooldown_timer: float = 0.0
 var _dash_direction: Vector3 = Vector3.ZERO
 var _damage_flash_timer: float = 0.0
+var _is_dancing: bool = false
+var _dance_timer: float = 0.0
 var _original_color: Color = Color(0.3, 0.6, 0.9)
 var _dash_start_pos: Vector3 = Vector3.ZERO
 var _dash_particles: GPUParticles3D = null
@@ -51,6 +53,18 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Победный танец
+	if _is_dancing:
+		_dance_timer += delta
+		# Вращение вокруг оси
+		rotation.y += delta * 8.0
+		# Прыжки
+		if _mesh_node != null:
+			var jump: float = absf(sin(_dance_timer * 5.0)) * 0.4
+			_mesh_node.position.y = jump
+			_mesh_node.rotation.z = sin(_dance_timer * 3.0) * 0.15
+		return
+
 	# Обновляем кулдаун рывка
 	if _dash_cooldown_timer > 0.0:
 		_dash_cooldown_timer -= delta
@@ -158,6 +172,14 @@ func try_dash() -> bool:
 
 	dash_started.emit()
 	return true
+
+
+## Запускает анимацию победного танца.
+func start_victory_dance() -> void:
+	_is_dancing = true
+	_dance_timer = 0.0
+	_move_direction = Vector3.ZERO
+	velocity = Vector3.ZERO
 
 
 ## Возвращает true, если рывок на кулдауне.

@@ -11,7 +11,7 @@ signal room_completed
 signal player_died
 
 # --- Константы ---
-const ARENA_SIZE: Vector2 = Vector2(36.0, 54.0)
+const ARENA_SIZE: Vector2 = Vector2(24.0, 36.0)
 const WALL_HEIGHT: float = 2.0
 const WALL_THICKNESS: float = 0.5
 
@@ -23,7 +23,7 @@ const AMBIENT_ENERGY: float = 0.4
 const LIGHT_ENERGY: float = 0.8
 
 ## Количество каменных гряд на арене.
-const RIDGE_COUNT: int = 100
+const RIDGE_COUNT: int = 130
 
 # --- @onready переменные ---
 ## Занятые ячейки сетки после генерации камней.

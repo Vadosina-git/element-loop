@@ -64,8 +64,14 @@ func _draw() -> void:
 		var from: Vector2 = positions[i]
 		var to: Vector2 = positions[(i + 1) % 5]
 		var is_active_arrow: bool = (i == active_idx)
-		var color: Color = ARROW_COLOR_ACTIVE if is_active_arrow else ARROW_COLOR
-		var width: float = ARROW_WIDTH_ACTIVE if is_active_arrow else ARROW_WIDTH
+		var color: Color
+		var width: float
+		if is_active_arrow:
+			color = COLORS[(i + 1) % 5].lightened(0.4)
+			width = ARROW_WIDTH_ACTIVE
+		else:
+			color = ARROW_COLOR
+			width = ARROW_WIDTH
 		_draw_arrow(from, to, color, width)
 
 	# Иконки стихий
@@ -86,10 +92,11 @@ func _draw() -> void:
 			draw_circle(pos, ICON_SIZE, Color(0.15, 0.15, 0.15, 0.9))
 			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, COLORS[i], 5.0)
 		elif is_target:
-			# Цель — яркая подсветка
-			draw_circle(pos, ICON_SIZE + 4.0, Color(1.0, 1.0, 0.3, 0.3))
-			draw_circle(pos, ICON_SIZE, Color(0.15, 0.15, 0.15, 0.9))
-			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, Color(1.0, 1.0, 0.3, 0.9), 5.0)
+			# Цель — подсветка цветом стихии (ярче)
+			var bright: Color = COLORS[i].lightened(0.4)
+			draw_circle(pos, ICON_SIZE + 4.0, Color(bright.r, bright.g, bright.b, 0.5))
+			draw_circle(pos, ICON_SIZE, Color(bright.r, bright.g, bright.b, 0.25))
+			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, bright, 5.0)
 		else:
 			# Неактивный — тусклый
 			draw_circle(pos, ICON_SIZE, Color(0.1, 0.1, 0.1, 0.5))

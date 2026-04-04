@@ -113,8 +113,8 @@ func _change_state(new_state: State) -> void:
 
 ## Выбирает случайную точку патрулирования рядом с врагом.
 func _pick_wander_target() -> void:
-	var half_x: float = 16.5  # Арена 36 - отступ
-	var half_z: float = 25.5  # Арена 54 - отступ
+	var half_x: float = 10.5  # Арена 24 - отступ
+	var half_z: float = 16.5  # Арена 36 - отступ
 	var pos: Vector3 = _enemy.global_position
 	_wander_target = Vector3(
 		clampf(pos.x + randf_range(-WANDER_RADIUS, WANDER_RADIUS), -half_x, half_x),

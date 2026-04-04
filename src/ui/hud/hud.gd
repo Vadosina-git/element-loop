@@ -20,8 +20,8 @@ signal camera_preset_selected(preset_name: String)
 # --- Константы ---
 
 const DASH_COOLDOWN_DEFAULT: float = 5.0
-const ARROW_MARGIN: float = 60.0
-const ARROW_SIZE: float = 40.0
+const ARROW_MARGIN: float = 100.0
+const ARROW_SIZE: float = 60.0
 
 # --- Приватные переменные ---
 
@@ -31,10 +31,13 @@ var _tracked_books: Array[Node3D] = []
 var _tracked_enemies: Array[EnemyBase] = []
 var _enemy_arrows: Array[Label] = []
 var _current_element: int = -1
+var _heart_labels: Array[Label] = []
+var _dying_hearts: Array[Dictionary] = []
+var _last_hp: int = 2
 
 # --- @onready переменные ---
 
-@onready var _hp_label: Label = %HPLabel
+@onready var _hearts_row: HBoxContainer = %HeartsRow
 @onready var _element_icon: Label = %ElementIcon
 @onready var _element_name_label: Label = %ElementName
 @onready var _element_slot: PanelContainer = %ElementSlot
@@ -57,15 +60,35 @@ func _ready() -> void:
 	_update_dash_cooldown_display(0.0, DASH_COOLDOWN_DEFAULT)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_book_arrows()
 	_update_enemy_arrows()
+	_update_dying_hearts(delta)
 
 # --- Публичные методы ---
 
-## Обновляет отображение очков здоровья игрока.
+## Обновляет отображение сердечек жизни.
 func update_hp(hp: int) -> void:
-	_hp_label.text = "HP: %d" % hp
+	# Анимация потери сердечка
+	if hp < _last_hp and _last_hp > 0:
+		var lost: int = _last_hp - hp
+		for i: int in range(lost):
+			var idx: int = hp + i
+			if idx < _heart_labels.size():
+				_start_heart_death(_heart_labels[idx])
+
+	_last_hp = hp
+
+	# Пересоздаём сердечки
+	for label: Label in _heart_labels:
+		label.queue_free()
+	_heart_labels.clear()
+	for i: int in range(hp):
+		var heart := Label.new()
+		heart.text = "❤️"
+		heart.add_theme_font_size_override("font_size", 80)
+		_hearts_row.add_child(heart)
+		_heart_labels.append(heart)
 
 
 ## Обновляет отображение текущей стихии.
@@ -108,7 +131,7 @@ func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
 		_tracked_books.append(book)
 		var arrow := Label.new()
 		arrow.text = "📖 ➤"
-		arrow.add_theme_font_size_override("font_size", 40)
+		arrow.add_theme_font_size_override("font_size", 60)
 		arrow.visible = false
 		add_child(arrow)
 		_book_arrows.append(arrow)
@@ -120,13 +143,22 @@ func setup_enemy_tracking(enemies: Array[EnemyBase]) -> void:
 	for arrow: Label in _enemy_arrows:
 		arrow.queue_free()
 	_enemy_arrows.clear()
-	for _i: int in range(enemies.size()):
+	for i: int in range(enemies.size()):
 		var arrow := Label.new()
-		arrow.text = "⚔️ ➤"
-		arrow.add_theme_font_size_override("font_size", 40)
+		arrow.text = "%s ➤" % _element_emoji(enemies[i].element)
+		arrow.add_theme_font_size_override("font_size", 60)
 		arrow.visible = false
 		add_child(arrow)
 		_enemy_arrows.append(arrow)
+
+
+## Показывает экран победы.
+func show_victory() -> void:
+	_game_over_panel.visible = true
+	# Переиспользуем панель Game Over с другим текстом
+	var label: Label = _game_over_panel.get_node("VBoxContainer/GameOverLabel") as Label
+	if label != null:
+		label.text = "🎉 ПОБЕДА! 🎉"
 
 
 ## Показывает экран Game Over.
@@ -156,60 +188,105 @@ func update_camera_preset(active_name: String) -> void:
 
 # --- Приватные методы ---
 
-## Обновляет стрелки-индикаторы для книг за экраном.
+## Запускает анимацию смерти сердечка — плавающий вверх, увеличение + прозрачность.
+func _start_heart_death(source_heart: Label) -> void:
+	var dying := Label.new()
+	dying.text = "💔"
+	dying.add_theme_font_size_override("font_size", 80)
+	dying.position = source_heart.global_position
+	dying.z_index = 10
+	add_child(dying)
+	_dying_hearts.append({"label": dying, "timer": 0.0, "start_pos": source_heart.global_position})
+
+
+## Обновляет анимации умирающих сердечек.
+func _update_dying_hearts(delta: float) -> void:
+	var to_remove: Array[int] = []
+	for i: int in range(_dying_hearts.size()):
+		var data: Dictionary = _dying_hearts[i]
+		var label: Label = data["label"] as Label
+		data["timer"] += delta
+		var progress: float = data["timer"] / 0.6
+		if progress >= 1.0:
+			label.queue_free()
+			to_remove.append(i)
+			continue
+		var s: float = lerpf(1.0, 2.5, progress)
+		label.scale = Vector2(s, s)
+		label.modulate.a = lerpf(1.0, 0.0, progress)
+		label.position.y = (data["start_pos"] as Vector2).y - progress * 40.0
+	for i: int in range(to_remove.size() - 1, -1, -1):
+		_dying_hearts.remove_at(to_remove[i])
+
+
+## Обновляет стрелку-индикатор на ближайшую книгу за экраном.
 func _update_book_arrows() -> void:
 	if _camera == null:
 		return
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var margin: float = ARROW_MARGIN
+	var cam_pos: Vector3 = _camera.global_position
 
+	# Скрываем все стрелки
+	for arrow: Label in _book_arrows:
+		arrow.visible = false
+
+	# Проверяем, есть ли хоть одна книга на экране
+	var any_on_screen: bool = false
+	var closest_idx: int = -1
+	var closest_dist: float = INF
 	for i: int in range(_tracked_books.size()):
-		if i >= _book_arrows.size():
-			break
 		var book: Node3D = _tracked_books[i]
-		var arrow: Label = _book_arrows[i]
-
 		if not is_instance_valid(book) or not book.visible:
-			arrow.visible = false
 			continue
-
-		# Проецируем 3D позицию книги на экран
 		var screen_pos: Vector2 = _camera.unproject_position(book.global_position)
 		var is_behind: bool = _camera.is_position_behind(book.global_position)
-
-		# Проверяем, на экране ли книга
-		var margin: float = ARROW_MARGIN
 		var on_screen: bool = not is_behind and screen_pos.x > margin and screen_pos.x < viewport_size.x - margin and screen_pos.y > margin and screen_pos.y < viewport_size.y - margin
-
 		if on_screen:
-			arrow.visible = false
+			any_on_screen = true
+			break
+
+	# Если книга видна на экране — стрелка не нужна
+	if any_on_screen:
+		return
+
+	# Ищем ближайшую книгу за экраном
+	for i: int in range(_tracked_books.size()):
+		var book: Node3D = _tracked_books[i]
+		if not is_instance_valid(book) or not book.visible:
 			continue
+		var dist: float = cam_pos.distance_to(book.global_position)
+		if dist < closest_dist:
+			closest_dist = dist
+			closest_idx = i
 
-		# Книга за экраном — показываем стрелку на границе
-		arrow.visible = true
+	if closest_idx < 0 or closest_idx >= _book_arrows.size():
+		return
 
-		# Если за камерой — инвертируем
-		if is_behind:
-			screen_pos = viewport_size - screen_pos
+	# Показываем стрелку только на ближайшую
+	var book: Node3D = _tracked_books[closest_idx]
+	var arrow: Label = _book_arrows[closest_idx]
+	var screen_pos: Vector2 = _camera.unproject_position(book.global_position)
+	var is_behind: bool = _camera.is_position_behind(book.global_position)
 
-		# Направление от центра экрана к книге
-		var center: Vector2 = viewport_size / 2.0
-		var dir: Vector2 = (screen_pos - center).normalized()
+	arrow.visible = true
+	if is_behind:
+		screen_pos = viewport_size - screen_pos
 
-		# Находим точку на границе экрана
-		var edge_pos: Vector2 = center
-		var half: Vector2 = (viewport_size / 2.0) - Vector2(margin, margin)
-		if absf(dir.x) > 0.001:
-			var t_x: float = half.x / absf(dir.x)
-			var t_y: float = half.y / absf(dir.y) if absf(dir.y) > 0.001 else INF
-			var t: float = minf(t_x, t_y)
-			edge_pos = center + dir * t
-		elif absf(dir.y) > 0.001:
-			edge_pos = center + dir * (half.y / absf(dir.y))
+	var center: Vector2 = viewport_size / 2.0
+	var dir: Vector2 = (screen_pos - center).normalized()
+	var edge_pos: Vector2 = center
+	var half: Vector2 = (viewport_size / 2.0) - Vector2(margin, margin)
+	if absf(dir.x) > 0.001:
+		var t_x: float = half.x / absf(dir.x)
+		var t_y: float = half.y / absf(dir.y) if absf(dir.y) > 0.001 else INF
+		var t: float = minf(t_x, t_y)
+		edge_pos = center + dir * t
+	elif absf(dir.y) > 0.001:
+		edge_pos = center + dir * (half.y / absf(dir.y))
 
-		# Угол стрелки
-		var angle: float = dir.angle()
-		arrow.rotation = angle
-		arrow.position = edge_pos - arrow.size / 2.0
+	arrow.rotation = dir.angle()
+	arrow.position = edge_pos - arrow.size / 2.0
 
 
 ## Обновляет подсветку уязвимых врагов на поле.
