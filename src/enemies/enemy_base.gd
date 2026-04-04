@@ -60,7 +60,6 @@ var _agony_target_rotation: float = 0.0
 var _agony_jump_timer: float = 0.0
 var _is_dying: bool = false
 var _death_timer: float = 0.0
-var _element_label: Label3D = null
 var _element_sprite: Sprite3D = null
 
 # --- @onready переменные ---
@@ -237,8 +236,6 @@ func _process_death(delta: float) -> void:
 		_material.albedo_color.a = alpha
 	if _element_sprite != null:
 		_element_sprite.modulate.a = lerpf(1.0, 0.0, explode_progress)
-	if _element_label != null:
-		_element_label.modulate.a = lerpf(1.0, 0.0, explode_progress)
 	# Скрываем круги
 	if _detection_circle != null:
 		_detection_circle.visible = false
@@ -258,27 +255,15 @@ func _get_modified_speed() -> float:
 
 ## Создаёт значок стихии над головой врага.
 func _setup_element_label() -> void:
-	# Спрайт с PNG-иконкой (работает на всех платформах)
 	var tex: Texture2D = ElementIcons.get_texture(element)
 	if tex != null:
 		_element_sprite = Sprite3D.new()
 		_element_sprite.texture = tex
-		_element_sprite.pixel_size = 0.003
+		_element_sprite.pixel_size = 0.005
 		_element_sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_element_sprite.no_depth_test = true
-		_element_sprite.modulate = ELEMENT_COLORS.get(element, Color.WHITE)
 		_element_sprite.position = Vector3(0.0, 1.2, 0.0)
 		add_child(_element_sprite)
-
-	# Текстовый label как дополнение (буква под иконкой)
-	_element_label = Label3D.new()
-	_element_label.text = ElementIcons.get_icon(element)
-	_element_label.font_size = 48
-	_element_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_element_label.no_depth_test = true
-	_element_label.modulate = ELEMENT_COLORS.get(element, Color.WHITE)
-	_element_label.position = Vector3(0.0, 0.85, 0.0)
-	add_child(_element_label)
 
 
 ## Создаёт пунктирный круг зоны обнаружения.
@@ -430,8 +415,6 @@ func _animate(delta: float, is_moving: bool) -> void:
 	# Значок стихии — покачивается в такт
 	if _element_sprite != null:
 		_element_sprite.position = Vector3(label_shake_x, 1.2 + label_bounce, 0.0)
-	if _element_label != null:
-		_element_label.position = Vector3(label_shake_x, 0.85 + label_bounce, 0.0)
 
 
 ## Настроить визуал: манекен из KayKit с цветом стихии.

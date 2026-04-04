@@ -8,9 +8,14 @@ extends Control
 
 # --- Константы ---
 
-## Порядок стихий на колесе (индекс в массиве).
-## Water побеждает Fire, Fire побеждает Tree и т.д.
-var ELEMENTS: Array[String] = ElementIcons.get_wheel_icons()
+## Порядок стихий на колесе: Water, Fire, Tree, Earth, Metal.
+const WHEEL_ELEMENTS: Array[ElementTable.Element] = [
+	ElementTable.Element.WATER,
+	ElementTable.Element.FIRE,
+	ElementTable.Element.TREE,
+	ElementTable.Element.EARTH,
+	ElementTable.Element.METAL,
+]
 const COLORS: Array[Color] = [
 	Color(0.1, 0.4, 0.9),   # Water
 	Color(0.9, 0.2, 0.1),   # Fire
@@ -75,11 +80,7 @@ func _draw() -> void:
 		_draw_arrow(from, to, color, width)
 
 	# Иконки стихий
-	var font: Font = ThemeDB.fallback_font
-	var font_size: int = 38
-	var ascent: float = font.get_ascent(font_size)
-	var descent: float = font.get_descent(font_size)
-	var text_height: float = ascent + descent
+	var tex_size: float = ICON_SIZE * 1.4
 	for i: int in range(5):
 		var pos: Vector2 = positions[i]
 		var is_active: bool = (i == active_idx)
@@ -87,25 +88,23 @@ func _draw() -> void:
 
 		# Фон-кружок
 		if is_active:
-			# Активная стихия — яркий кружок с пульсацией
 			draw_circle(pos, ICON_SIZE + 4.0, Color(COLORS[i].r, COLORS[i].g, COLORS[i].b, 0.4))
 			draw_circle(pos, ICON_SIZE, Color(0.15, 0.15, 0.15, 0.9))
 			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, COLORS[i], 5.0)
 		elif is_target:
-			# Цель — подсветка цветом стихии (ярче)
 			var bright: Color = COLORS[i].lightened(0.4)
 			draw_circle(pos, ICON_SIZE + 4.0, Color(bright.r, bright.g, bright.b, 0.5))
 			draw_circle(pos, ICON_SIZE, Color(bright.r, bright.g, bright.b, 0.25))
 			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, bright, 5.0)
 		else:
-			# Неактивный — тусклый
 			draw_circle(pos, ICON_SIZE, Color(0.1, 0.1, 0.1, 0.5))
 			draw_arc(pos, ICON_SIZE, 0.0, TAU, 32, Color(COLORS[i].r, COLORS[i].g, COLORS[i].b, 0.3), 2.0)
 
-		# Эмодзи
-		var draw_width: float = ICON_SIZE * 2.0
-		var draw_pos: Vector2 = Vector2(pos.x - draw_width / 2.0, pos.y + text_height / 2.0 - descent)
-		draw_string(font, draw_pos, ELEMENTS[i], HORIZONTAL_ALIGNMENT_CENTER, draw_width, font_size)
+		# PNG иконка
+		var tex: Texture2D = ElementIcons.get_texture(WHEEL_ELEMENTS[i])
+		if tex != null:
+			var rect: Rect2 = Rect2(pos - Vector2(tex_size, tex_size) / 2.0, Vector2(tex_size, tex_size))
+			draw_texture_rect(tex, rect, false)
 
 
 # --- Публичные методы ---

@@ -31,7 +31,8 @@ var _tracked_books: Array[Node3D] = []
 var _tracked_enemies: Array[EnemyBase] = []
 var _enemy_arrows: Array[Label] = []
 var _current_element: int = -1
-var _heart_labels: Array[Label] = []
+var _element_texture_rect: TextureRect = null
+var _heart_labels: Array[Control] = []
 var _dying_hearts: Array[Dictionary] = []
 var _last_hp: int = 2
 
@@ -80,13 +81,15 @@ func update_hp(hp: int) -> void:
 	_last_hp = hp
 
 	# Пересоздаём сердечки
-	for label: Label in _heart_labels:
-		label.queue_free()
+	for child: Control in _heart_labels:
+		child.queue_free()
 	_heart_labels.clear()
+	var heart_tex: Texture2D = ElementIcons.get_heart_texture()
 	for i: int in range(hp):
-		var heart := Label.new()
-		heart.text = ElementIcons.get_heart()
-		heart.add_theme_font_size_override("font_size", 80)
+		var heart := TextureRect.new()
+		heart.texture = heart_tex
+		heart.custom_minimum_size = Vector2(64, 64)
+		heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_hearts_row.add_child(heart)
 		_heart_labels.append(heart)
 
@@ -94,8 +97,14 @@ func update_hp(hp: int) -> void:
 ## Обновляет отображение текущей стихии.
 ## Передать -1, чтобы показать пустую ячейку и заблокировать кнопку зоны.
 func update_element(element: int) -> void:
+	# Удаляем старую текстуру
+	if _element_texture_rect != null:
+		_element_texture_rect.queue_free()
+		_element_texture_rect = null
+
 	if element == -1:
 		_element_icon.text = "?"
+		_element_icon.visible = true
 		_element_icon.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35, 0.6))
 		_element_name_label.text = "—"
 		_element_name_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 0.6))
@@ -104,9 +113,16 @@ func update_element(element: int) -> void:
 	else:
 		var el: ElementTable.Element = element as ElementTable.Element
 		var color: Color = _element_color(el)
-		_element_icon.text = _element_emoji(el)
-		_element_icon.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-		_element_name_label.text = _element_name(el)
+		_element_icon.visible = false
+		# PNG иконка стихии
+		var tex: Texture2D = ElementIcons.get_texture(el)
+		if tex != null:
+			_element_texture_rect = TextureRect.new()
+			_element_texture_rect.texture = tex
+			_element_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			_element_texture_rect.layout_mode = 2
+			_element_slot.add_child(_element_texture_rect)
+		_element_name_label.text = ElementIcons.get_name(el)
 		_element_name_label.add_theme_color_override("font_color", color)
 		_set_slot_color(Color(color.r, color.g, color.b, 0.3))
 		_zone_button.disabled = false
@@ -145,7 +161,7 @@ func setup_enemy_tracking(enemies: Array[EnemyBase]) -> void:
 	_enemy_arrows.clear()
 	for i: int in range(enemies.size()):
 		var arrow := Label.new()
-		arrow.text = "%s ➤" % _element_emoji(enemies[i].element)
+		arrow.text = "%s >>" % ElementIcons.get_name(enemies[i].element)
 		arrow.add_theme_font_size_override("font_size", 60)
 		arrow.visible = false
 		add_child(arrow)
@@ -189,10 +205,11 @@ func update_camera_preset(active_name: String) -> void:
 # --- Приватные методы ---
 
 ## Запускает анимацию смерти сердечка — плавающий вверх, увеличение + прозрачность.
-func _start_heart_death(source_heart: Label) -> void:
-	var dying := Label.new()
-	dying.text = ElementIcons.get_heart_broken()
-	dying.add_theme_font_size_override("font_size", 80)
+func _start_heart_death(source_heart: Control) -> void:
+	var dying := TextureRect.new()
+	dying.texture = ElementIcons.get_heart_broken_texture()
+	dying.custom_minimum_size = Vector2(64, 64)
+	dying.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	dying.position = source_heart.global_position
 	dying.z_index = 10
 	add_child(dying)
@@ -204,16 +221,16 @@ func _update_dying_hearts(delta: float) -> void:
 	var to_remove: Array[int] = []
 	for i: int in range(_dying_hearts.size()):
 		var data: Dictionary = _dying_hearts[i]
-		var label: Label = data["label"] as Label
+		var ctrl: Control = data["label"] as Control
 		data["timer"] += delta
 		var progress: float = data["timer"] / 0.6
 		if progress >= 1.0:
-			label.queue_free()
+			ctrl.queue_free()
 			to_remove.append(i)
 			continue
 		var s: float = lerpf(1.0, 2.5, progress)
-		label.scale = Vector2(s, s)
-		label.modulate.a = lerpf(1.0, 0.0, progress)
+		ctrl.scale = Vector2(s, s)
+		ctrl.modulate.a = lerpf(1.0, 0.0, progress)
 		label.position.y = (data["start_pos"] as Vector2).y - progress * 40.0
 	for i: int in range(to_remove.size() - 1, -1, -1):
 		_dying_hearts.remove_at(to_remove[i])
@@ -416,9 +433,6 @@ func _element_color(element: ElementTable.Element) -> Color:
 	return Color.WHITE
 
 
-## Возвращает иконку стихии (эмодзи или юникод по платформе).
-func _element_emoji(element: ElementTable.Element) -> String:
-	return ElementIcons.get_icon(element)
 
 # --- Колбеки сигналов ---
 
