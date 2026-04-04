@@ -28,11 +28,11 @@ const DEATH_SCALE_MAX: float = 3.0
 
 ## Значки стихий (эмодзи).
 const ELEMENT_ICONS: Dictionary = {
-	ElementTable.Element.FIRE: "🔥",
-	ElementTable.Element.WATER: "💧",
-	ElementTable.Element.TREE: "🌿",
-	ElementTable.Element.EARTH: "🪨",
-	ElementTable.Element.METAL: "⚙️",
+	ElementTable.Element.FIRE: "▲",
+	ElementTable.Element.WATER: "●",
+	ElementTable.Element.TREE: "♣",
+	ElementTable.Element.EARTH: "■",
+	ElementTable.Element.METAL: "◆",
 }
 
 # --- Экспортируемые переменные ---
@@ -332,7 +332,7 @@ func _setup_pulse_circle() -> void:
 	var shader := Shader.new()
 	shader.code = "
 shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_never;
+render_mode unshaded, cull_disabled;
 
 uniform vec4 pulse_color : source_color = vec4(0.2, 0.7, 0.2, 0.8);
 uniform float time_scale = 0.5;
@@ -342,17 +342,10 @@ uniform float ring_width = 0.5;
 void fragment() {
 	vec2 uv_centered = UV - vec2(0.5);
 	float dist = length(uv_centered) * 2.0;
-
-	// Круг-маска
 	float circle_mask = step(dist, 1.0);
-
-	// Пульсирующие кольца расходятся от центра
 	float wave = fract(dist * ring_count - TIME * time_scale);
 	float ring = smoothstep(0.0, ring_width, wave) * (1.0 - smoothstep(ring_width, ring_width * 2.0, wave));
-
-	// Затухание к краю
 	float fade = 1.0 - dist;
-
 	float alpha = ring * fade * circle_mask * pulse_color.a;
 	ALBEDO = pulse_color.rgb;
 	ALPHA = alpha;
@@ -375,7 +368,7 @@ func _update_detection_circle() -> void:
 		_detection_circle.global_position = flat_pos
 		_detection_circle.global_rotation = Vector3.ZERO
 	if _pulse_circle != null and _pulse_circle.visible:
-		_pulse_circle.global_position = Vector3(flat_pos.x, 0.04, flat_pos.z)
+		_pulse_circle.global_position = Vector3(flat_pos.x, 0.1, flat_pos.z)
 		_pulse_circle.global_rotation = Vector3.ZERO
 
 

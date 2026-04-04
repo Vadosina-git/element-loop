@@ -10,7 +10,7 @@ extends Control
 
 ## Порядок стихий на колесе (индекс в массиве).
 ## Water побеждает Fire, Fire побеждает Tree и т.д.
-const ELEMENTS: Array[String] = ["💧", "🔥", "🌿", "🪨", "⚙️"]
+const ELEMENTS: Array[String] = ["●", "▲", "♣", "■", "◆"]
 const COLORS: Array[Color] = [
 	Color(0.1, 0.4, 0.9),   # Water
 	Color(0.9, 0.2, 0.1),   # Fire
