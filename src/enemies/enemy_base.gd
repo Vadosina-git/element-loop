@@ -26,14 +26,7 @@ const DEATH_FREEZE_TIME: float = 0.0
 const DEATH_EXPLODE_TIME: float = 0.5
 const DEATH_SCALE_MAX: float = 3.0
 
-## Значки стихий (эмодзи).
-const ELEMENT_ICONS: Dictionary = {
-	ElementTable.Element.FIRE: "▲",
-	ElementTable.Element.WATER: "●",
-	ElementTable.Element.TREE: "♣",
-	ElementTable.Element.EARTH: "■",
-	ElementTable.Element.METAL: "◆",
-}
+## Значки стихий — через ElementIcons (эмодзи/юникод по платформе).
 
 # --- Экспортируемые переменные ---
 
@@ -263,7 +256,7 @@ func _get_modified_speed() -> float:
 ## Создаёт значок стихии над головой врага.
 func _setup_element_label() -> void:
 	_element_label = Label3D.new()
-	_element_label.text = ELEMENT_ICONS.get(element, "?")
+	_element_label.text = ElementIcons.get_icon(element)
 	_element_label.font_size = 64
 	_element_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_element_label.no_depth_test = true

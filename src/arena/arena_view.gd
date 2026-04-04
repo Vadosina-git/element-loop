@@ -153,7 +153,8 @@ func _place_wall_row(
 
 
 ## Возвращает массив равномерно распределённых безопасных позиций.
-func get_distributed_spawn_positions(count: int) -> Array[Vector3]:
+## min_dist_from — минимальная дистанция от точки (например, от игрока).
+func get_distributed_spawn_positions(count: int, avoid_pos: Vector3 = Vector3.ZERO, min_dist: float = 0.0) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 	# Разбиваем арену на сетку секторов
 	var cols: int = ceili(sqrt(count * ARENA_SIZE.x / ARENA_SIZE.y))
@@ -180,6 +181,11 @@ func get_distributed_spawn_positions(count: int) -> Array[Vector3]:
 					randf_range(base_z, base_z + sector_h),
 				)
 				if _is_position_safe(try_pos):
+					if min_dist > 0.0:
+						var diff: Vector3 = try_pos - avoid_pos
+						diff.y = 0.0
+						if diff.length() < min_dist:
+							continue
 					pos = try_pos
 					found = true
 					break

@@ -104,7 +104,7 @@ func _spawn_enemies() -> void:
 		ElementTable.Element.METAL,
 	]
 
-	var enemy_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT)
+	var enemy_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT, _player.global_position, 5.0)
 	for i: int in range(ENEMY_COUNT):
 		var enemy: EnemyBase = scene.instantiate() as EnemyBase
 		enemy.element = elements[i % elements.size()]
@@ -135,18 +135,6 @@ func _spawn_books() -> void:
 		book.element_picked.connect(_on_element_picked)
 		book.get_available_elements = _get_counter_elements
 		_books.append(book)
-
-
-## Возвращает контр-стихии для живых врагов (без дубликатов).
-func _get_counter_elements() -> Array:
-	var counters: Array = []
-	for eid: int in _enemies:
-		var enemy: EnemyBase = _enemies[eid] as EnemyBase
-		if is_instance_valid(enemy) and not enemy._is_dying:
-			var counter: ElementTable.Element = ElementTable.get_counter(enemy.element)
-			if counter not in counters:
-				counters.append(counter)
-	return counters
 
 
 ## Удаляет одну случайную книгу с поля.
@@ -291,11 +279,22 @@ func _on_camera_preset_selected(preset_name: String) -> void:
 	_hud.update_camera_preset(preset_name)
 
 
+## Возвращает контр-стихии для живых врагов (без дубликатов).
+func _get_counter_elements() -> Array:
+	var counters: Array = []
+	for eid: int in _enemies:
+		var enemy: EnemyBase = _enemies[eid] as EnemyBase
+		if is_instance_valid(enemy) and not enemy._is_dying:
+			var counter: ElementTable.Element = ElementTable.get_counter(enemy.element)
+			if counter not in counters:
+				counters.append(counter)
+	return counters
+
+
 ## Победа — все враги уничтожены.
 func _on_victory() -> void:
 	set_process(false)
 	_player.start_victory_dance()
-	# Показываем экран победы с задержкой (после анимации)
 	get_tree().create_timer(3.0).timeout.connect(_show_victory_screen)
 
 
@@ -318,5 +317,5 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event as InputEventKey
 		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_R:
-			_on_restart_pressed()
 			get_viewport().set_input_as_handled()
+			_on_restart_pressed()

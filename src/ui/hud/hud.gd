@@ -85,7 +85,7 @@ func update_hp(hp: int) -> void:
 	_heart_labels.clear()
 	for i: int in range(hp):
 		var heart := Label.new()
-		heart.text = "♥"
+		heart.text = ElementIcons.get_heart()
 		heart.add_theme_font_size_override("font_size", 80)
 		_hearts_row.add_child(heart)
 		_heart_labels.append(heart)
@@ -130,7 +130,7 @@ func setup_book_indicators(books: Array[BookObject], camera: Camera3D) -> void:
 	for book: BookObject in books:
 		_tracked_books.append(book)
 		var arrow := Label.new()
-		arrow.text = "► Книга"
+		arrow.text = ElementIcons.get_book_arrow()
 		arrow.add_theme_font_size_override("font_size", 60)
 		arrow.visible = false
 		add_child(arrow)
@@ -158,7 +158,7 @@ func show_victory() -> void:
 	# Переиспользуем панель Game Over с другим текстом
 	var label: Label = _game_over_panel.get_node("VBoxContainer/GameOverLabel") as Label
 	if label != null:
-		label.text = "*** ПОБЕДА! ***"
+		label.text = ElementIcons.get_victory_text()
 
 
 ## Показывает экран Game Over.
@@ -191,7 +191,7 @@ func update_camera_preset(active_name: String) -> void:
 ## Запускает анимацию смерти сердечка — плавающий вверх, увеличение + прозрачность.
 func _start_heart_death(source_heart: Label) -> void:
 	var dying := Label.new()
-	dying.text = "♡"
+	dying.text = ElementIcons.get_heart_broken()
 	dying.add_theme_font_size_override("font_size", 80)
 	dying.position = source_heart.global_position
 	dying.z_index = 10
@@ -416,20 +416,9 @@ func _element_color(element: ElementTable.Element) -> Color:
 	return Color.WHITE
 
 
-## Возвращает эмодзи стихии.
+## Возвращает иконку стихии (эмодзи или юникод по платформе).
 func _element_emoji(element: ElementTable.Element) -> String:
-	match element:
-		ElementTable.Element.FIRE:
-			return "▲"
-		ElementTable.Element.WATER:
-			return "●"
-		ElementTable.Element.TREE:
-			return "♣"
-		ElementTable.Element.EARTH:
-			return "■"
-		ElementTable.Element.METAL:
-			return "◆"
-	return "?"
+	return ElementIcons.get_icon(element)
 
 # --- Колбеки сигналов ---
 
