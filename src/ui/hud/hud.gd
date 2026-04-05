@@ -113,7 +113,7 @@ func update_hp(hp: int) -> void:
 	for i: int in range(hp):
 		var heart := TextureRect.new()
 		heart.texture = heart_tex
-		heart.custom_minimum_size = Vector2(70, 70)
+		heart.custom_minimum_size = Vector2(47, 47)
 		heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_hearts_row.add_child(heart)
 		_heart_labels.append(heart)
