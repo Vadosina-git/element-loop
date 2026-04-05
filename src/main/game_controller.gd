@@ -25,8 +25,10 @@ var _zone_logic: ZoneLogic = ZoneLogic.new()
 var _enemies: Dictionary = {}  # {enemy_id: EnemyBase}
 var _active_zones: Array[ZoneObject] = []
 var _next_enemy_id: int = 1
+var _active_book: BookObject = null
 
-const ENEMY_COUNT: int = 13
+const ENEMY_COUNT: int = 5
+const BOOK_COUNT: int = 3
 const SPAWN_MARGIN: float = 2.0
 
 
@@ -63,6 +65,10 @@ func _ready() -> void:
 
 	# Подключаем перезапуск
 	_hud.restart_pressed.connect(_on_restart_pressed)
+
+	# Подключаем рулетку выбора стихии
+	_hud.get_element_picker().element_chosen.connect(_on_element_chosen)
+	_hud.get_element_picker().choice_declined.connect(_on_element_declined)
 
 	# Подключаем переключение персонажа
 	_hud.next_character_pressed.connect(_player.next_character)
@@ -134,12 +140,12 @@ func _spawn_enemies() -> void:
 ## Спавнит книги в случайных точках арены.
 func _spawn_books() -> void:
 	var scene: PackedScene = load(BOOK_SCENE) as PackedScene
-	var book_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT)
-	for i: int in range(ENEMY_COUNT):
+	var book_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(BOOK_COUNT)
+	for i: int in range(BOOK_COUNT):
 		var book: BookObject = scene.instantiate() as BookObject
 		book.position = book_positions[i]
 		_arena.add_child(book)
-		book.element_picked.connect(_on_element_picked)
+		book.book_activated.connect(_on_book_activated)
 		book.get_available_elements = _get_counter_elements
 		_books.append(book)
 
@@ -180,9 +186,40 @@ func _enforce_zone_limit() -> void:
 
 # --- Колбеки сигналов ---
 
-## Игрок подобрал стихию из книги.
-func _on_element_picked(element: ElementTable.Element) -> void:
+## Книга активирована — показываем рулетку.
+func _on_book_activated(book: BookObject) -> void:
+	_active_book = book
+	var available: Array = _get_counter_elements()
+	if available.size() < 2:
+		# Если меньше 2 стихий — добавляем случайные
+		var all: Array = [
+			ElementTable.Element.FIRE, ElementTable.Element.WATER,
+			ElementTable.Element.TREE, ElementTable.Element.EARTH,
+			ElementTable.Element.METAL,
+		]
+		for el: ElementTable.Element in all:
+			if el not in available:
+				available.append(el)
+			if available.size() >= 2:
+				break
+	_hud.show_element_picker(available)
+
+
+## Игрок выбрал стихию в рулетке.
+func _on_element_chosen(element: ElementTable.Element, from_pos: Vector2) -> void:
+	# Сначала анимация перелёта, потом обновление слота
+	_hud.play_element_fly(element as int, from_pos)
 	_player.pickup_element(element as int)
+	if _active_book != null:
+		_active_book.consume()
+		_active_book = null
+
+
+## Игрок отказался от выбора стихии.
+func _on_element_declined() -> void:
+	if _active_book != null:
+		_active_book.cancel_activation()
+		_active_book = null
 
 
 ## Нажата кнопка постановки зоны.
@@ -259,7 +296,6 @@ func _on_enemy_killed(enemy_id: int) -> void:
 	if enemy != null:
 		enemy.start_death()
 		_enemies.erase(enemy_id)
-	_remove_one_book()
 	_hud.update_enemy_count(_enemies.size())
 
 	# Проверка победы

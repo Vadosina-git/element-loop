@@ -10,6 +10,7 @@ extends Node3D
 # --- Сигналы ---
 
 signal element_picked(element: ElementTable.Element)
+signal book_activated(book: BookObject)
 
 # --- Константы ---
 
@@ -35,7 +36,7 @@ var _is_holding: bool = false
 var _respawn_timer: float = 0.0
 var _player_in_range: bool = false
 var _vanish_timer: float = 0.0
-var _arena_size: Vector2 = Vector2(24.0, 36.0)
+var _arena_size: Vector2 = Vector2(36.0, 24.0)
 ## Callable для получения доступных стихий (контры живых врагов).
 var get_available_elements: Callable = Callable()
 
@@ -56,7 +57,6 @@ func _ready() -> void:
 	_setup_loader()
 	_area.body_entered.connect(_on_body_entered)
 	_area.body_exited.connect(_on_body_exited)
-	_reset_vanish_timer()
 
 
 func _process(delta: float) -> void:
@@ -65,20 +65,6 @@ func _process(delta: float) -> void:
 		if _respawn_timer <= 0.0:
 			_respawn()
 		return
-
-	# Автоисчезновение — книга пропадает и респаунится в новом месте
-	_vanish_timer -= delta
-	if _vanish_timer <= 0.0:
-		_set_visual_visible(true)
-		_vanish_and_relocate()
-		return
-
-	# Мигание перед исчезновением
-	if _vanish_timer <= BLINK_START:
-		var blink_on: bool = fmod(_vanish_timer * BLINK_SPEED, 1.0) > 0.5
-		_set_visual_visible(blink_on)
-	else:
-		_set_visual_visible(true)
 
 	if _is_holding and _player_in_range:
 		_hold_timer += delta
@@ -220,21 +206,28 @@ func _update_loader(progress: float) -> void:
 		_loader_mesh.visible = false
 
 
-## Активирует книгу: скрывает, выдаёт случайную стихию.
+## Активирует книгу: показывает рулетку выбора стихии.
 func _activate() -> void:
-	_is_active = false
 	_is_holding = false
 	_hold_timer = 0.0
+	_update_loader(0.0)
+	book_activated.emit(self)
+
+
+## Скрывает книгу после выбора стихии и запускает респаун.
+func consume() -> void:
+	_is_active = false
 	_player_in_range = false
 	_mesh.visible = false
 	if _label != null:
 		_label.visible = false
-	_update_loader(0.0)
-
-	var random_element: ElementTable.Element = _get_random_element()
-	element_picked.emit(random_element)
-
 	_respawn_timer = RESPAWN_DELAY
+
+
+## Отменяет активацию (игрок отказался от выбора).
+func cancel_activation() -> void:
+	_is_holding = false
+	_hold_timer = 0.0
 
 
 ## Респаунит книгу в новой случайной точке.

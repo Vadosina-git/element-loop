@@ -40,8 +40,8 @@ const FAIL_JOKES: Array[String] = [
 ]
 
 const CHARACTERS: Array[Dictionary] = [
-	{"name": "Скелет-Маг", "path": "res://assets/kaykit_skeletons/Skeleton_Mage_Full.glb"},
 	{"name": "Рыцарь", "path": "res://assets/kaykit_skeletons/Knight.glb"},
+	{"name": "Скелет-Маг", "path": "res://assets/kaykit_skeletons/Skeleton_Mage_Full.glb"},
 	{"name": "Варвар", "path": "res://assets/kaykit_skeletons/Barbarian.glb"},
 	{"name": "Маг", "path": "res://assets/kaykit_skeletons/Mage.glb"},
 	{"name": "Разбойник", "path": "res://assets/kaykit_skeletons/Rogue.glb"},
@@ -86,6 +86,8 @@ var _is_joking: bool = false
 const PLACE_ZONE_DURATION: float = 0.4
 const JOKE_DURATION: float = 1.5
 const ROTATION_SPEED: float = 12.0
+const ACCELERATION: float = 15.0
+const DECELERATION: float = 10.0
 var _dash_start_pos: Vector3 = Vector3.ZERO
 var _dash_particles: GPUParticles3D = null
 
@@ -173,8 +175,12 @@ func _physics_process(delta: float) -> void:
 				_joke_bubble.queue_free()
 				_joke_bubble = null
 
-	# Обычное движение
-	velocity = _move_direction * MOVE_SPEED
+	# Обычное движение с инерцией
+	var target_velocity: Vector3 = _move_direction * MOVE_SPEED
+	if target_velocity.length() > 0.1:
+		velocity = velocity.lerp(target_velocity, ACCELERATION * delta)
+	else:
+		velocity = velocity.lerp(Vector3.ZERO, DECELERATION * delta)
 	move_and_slide()
 	_animate_walk(delta)
 	_animate_damage_flash(delta)

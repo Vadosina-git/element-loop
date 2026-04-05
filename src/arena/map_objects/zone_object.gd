@@ -30,7 +30,7 @@ const ELEMENT_COLORS: Dictionary = {
 # --- Публичные переменные ---
 
 var element: ElementTable.Element = ElementTable.Element.FIRE
-var zone_radius: float = 1.5
+var zone_radius: float = 1.6
 var _lifetime_timer: float = 0.0
 
 # --- @onready переменные ---
@@ -47,21 +47,9 @@ func _ready() -> void:
 	# добавления в дерево, поэтому _ready() корректно использует element.
 	_setup_visual()
 	_setup_collision()
+	_setup_nav_obstacle()
 	_area.body_entered.connect(_on_body_entered)
 	_area.body_exited.connect(_on_body_exited)
-	_lifetime_timer = ZONE_LIFETIME
-
-
-func _process(delta: float) -> void:
-	_lifetime_timer -= delta
-
-	# Мигание перед исчезновением
-	if _lifetime_timer <= BLINK_START and _lifetime_timer > 0.0:
-		var blink_on: bool = fmod(_lifetime_timer * BLINK_SPEED, 1.0) > 0.5
-		_mesh.visible = blink_on
-	elif _lifetime_timer <= 0.0:
-		queue_free()
-		return
 
 
 # --- Публичные методы ---
@@ -131,6 +119,16 @@ func _setup_collision() -> void:
 	# Зона только обнаруживает врагов, не участвует в физике
 	_area.collision_layer = 0
 	_area.collision_mask = 2  # Враги на слое 2
+
+
+## Добавляет NavigationObstacle3D для Earth-зон (враги обходят).
+func _setup_nav_obstacle() -> void:
+	if element != ElementTable.Element.EARTH:
+		return
+	var obstacle := NavigationObstacle3D.new()
+	obstacle.radius = zone_radius
+	obstacle.avoidance_enabled = true
+	add_child(obstacle)
 
 
 # --- Колбеки сигналов ---

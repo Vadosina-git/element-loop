@@ -584,3 +584,113 @@ godot --headless --path . --export-release "Android" builds/android/element_loop
 # iOS-экспорт
 godot --headless --path . --export-release "iOS" builds/ios/
 ```
+
+---
+
+## РЕАЛИЗОВАННЫЕ СИСТЕМЫ (ТЕКУЩЕЕ СОСТОЯНИЕ)
+
+### Навигация врагов (NavMesh + кеширование)
+
+**Архитектура:**
+- `NavigationRegion3D` на арене — бейкается один раз при старте
+- Содержит невидимый BoxMesh (пол) + копии коллайдеров камней для вырезов
+- `cell_size = 0.5`, `agent_radius = 0.4`
+- После бейка вспомогательные мешки скрываются
+
+**NavigationAgent3D на каждом враге:**
+- `path_desired_distance = 1.0`, `target_desired_distance = 1.0`
+- `avoidance_enabled = true` — враги расходятся в узких проходах
+- `radius = 0.3`
+
+**Алгоритм движения (enemy_base.gd `_physics_process`):**
+
+```
+Каждые 0.3 сек (_nav_update_timer):
+  1. agent.target_position = player.global_position
+  2. Если путь не завершён:
+       next_pos = agent.get_next_path_position()
+       next_pos.y = enemy.y  (фикс разницы высот навмеша и врага)
+       direction = (next_pos - enemy_pos).normalized()
+  3. Если навигация не дала результат (length² < 0.01):
+       direction = (player_pos - enemy_pos).normalized()  (fallback + push_warning)
+  4. Кешируем direction → _cached_move_dir
+
+Каждый кадр:
+  1. current_dir = velocity.normalized()
+  2. lerp_factor = 15.0 * (speed / base_speed)  — быстрее враг → быстрее поворот
+  3. smooth_dir = current_dir.lerp(_cached_move_dir, lerp_factor * delta).normalized()
+  4. velocity = smooth_dir * speed
+  5. move_and_slide()
+```
+
+**Ключевые решения:**
+- Кеширование направления раз в 0.3 сек — без вибрации
+- Lerp пропорционально скорости — ярость (+25%) = быстрее поворот
+- Fallback на прямое движение — если навмеш не покрывает зону
+- `move_and_slide()` — дополнительное скольжение по стенам
+
+**Заложено на будущее:**
+- Earth-стена (способность игрока): `NavigationObstacle3D` добавляется автоматически при создании Earth-зоны (`zone_object.gd _setup_nav_obstacle`)
+- Босс: одного размера с обычными врагами (единый agent_radius)
+- Респавн объектов: через `NavigationServer3D.map_get_random_point()` — гарантированно на навмеше
+
+### Выбор стихии (рулетка)
+
+**При подборе книги:**
+1. Книга эмитит `book_activated(book)` → GameController показывает рулетку
+2. Рулетка: 2 случайных варианта из контр-стихий живых врагов + кнопка отказа
+3. Клавиши: Q (левая), E (правая), Esc (отказ)
+4. Игра ставится на паузу (`get_tree().paused = true`)
+5. Рулетка работает на паузе (`process_mode = PROCESS_MODE_ALWAYS`)
+6. После выбора: книга исчезает (`consume()`), респаунится через 2 сек в новой точке
+
+**Книги:**
+- 3 штуки на поле, не исчезают автоматически
+- Стихии выбираются из контров живых врагов (`_get_counter_elements`)
+
+### Зоны (ловушки)
+
+- Лимит: 2 активных зоны (MAX_ZONES = 2), третья убивает первую (FIFO)
+- Не исчезают по таймеру
+- Радиус: 0.8
+- Earth-зоны добавляют NavigationObstacle3D для обхода врагами
+
+### Иконки (кроссплатформенные)
+
+**`ElementIcons` (src/ui/element_icons.gd):**
+- PNG-текстуры 160x160 из Apple Color Emoji (assets/icons/)
+- Используются через `Sprite3D` (3D, над врагами) и `TextureRect` (UI)
+- `get_texture(element)`, `get_heart_texture()`, `get_book_texture()`, `get_alert_texture()`
+- Названия: `get_element_name(element)` → "Огонь", "Вода" и т.д.
+
+### Персонажи
+
+**8 персонажей из KayKit (assets/kaykit_skeletons/):**
+- GLB с 95 анимациями каждый
+- Переключение через `< >` кнопки (HUD слева внизу)
+- Анимации: `Walking_A`, `Unarmed_Idle`, `Jump_Full_Short`, `Jump_Land`, `Cheer`
+- Модель повёрнута на PI (rotation.y) для совместимости с `look_at`
+- `_hide_equipment()` — скрывает оружие в руках
+
+### Камера
+
+**Пресеты:**
+- Стандарт (дефолт): angle=48°, height=16, fov=45
+- Ближняя: angle=55°, height=10, fov=45
+- Top-Down: angle=80°, height=16, fov=45
+- Изометрия: angle=35°, height=12, fov=40
+
+**Слежение:** `set_as_top_level(true)`, lerp к позиции игрока (`FOLLOW_SPEED = 5.0`)
+
+### Движение игрока
+
+- Инерция: `ACCELERATION = 15.0`, `DECELERATION = 10.0` (lerp velocity)
+- Плавный поворот: `ROTATION_SPEED = 12.0` (lerp rotation.y)
+- Рывок (Shift): velocity-based, кулдаун 5 сек
+
+### Арена
+
+- Размер: 36x24 (шире чем выше)
+- Процедурный лабиринт: `MazeGenerator`, 120 гряд, MIN_GAP=4, CELL_SIZE=1.0
+- Тайлы и стены: KayKit Prototype, scale 0.25
+- Навмеш бейкается с учётом камней

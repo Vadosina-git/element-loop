@@ -14,7 +14,7 @@ signal preset_changed(preset_name: String)
 
 ## Пресеты камеры: {имя: {angle, height, fov}}.
 const PRESETS: Dictionary = {
-	"Стандарт": {"angle": 50.0, "height": 14.0, "fov": 50.0},
+	"Стандарт": {"angle": 48.0, "height": 10.7, "fov": 45.0},
 	"Ближняя": {"angle": 55.0, "height": 10.0, "fov": 45.0},
 	"Top-Down": {"angle": 80.0, "height": 16.0, "fov": 45.0},
 	"Изометрия": {"angle": 35.0, "height": 12.0, "fov": 40.0},
@@ -32,7 +32,7 @@ const TRANSITION_SPEED: float = 4.0
 
 # --- Публичные переменные ---
 
-var current_preset: String = "Ближняя"
+var current_preset: String = "Стандарт"
 
 # --- Приватные переменные ---
 
@@ -49,7 +49,7 @@ var _is_transitioning: bool = false
 
 func _ready() -> void:
 	set_as_top_level(true)
-	_apply_immediate("Ближняя")
+	_apply_immediate("Стандарт")
 
 
 func _process(delta: float) -> void:

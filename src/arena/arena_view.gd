@@ -11,7 +11,7 @@ signal room_completed
 signal player_died
 
 # --- Константы ---
-const ARENA_SIZE: Vector2 = Vector2(24.0, 36.0)
+const ARENA_SIZE: Vector2 = Vector2(36.0, 24.0)
 const WALL_HEIGHT: float = 2.0
 const WALL_THICKNESS: float = 0.5
 
@@ -23,7 +23,7 @@ const AMBIENT_ENERGY: float = 0.4
 const LIGHT_ENERGY: float = 0.8
 
 ## Количество каменных гряд на арене.
-const RIDGE_COUNT: int = 130
+const RIDGE_COUNT: int = 1080
 
 # --- @onready переменные ---
 ## Занятые ячейки сетки после генерации камней.
@@ -199,8 +199,18 @@ func get_distributed_spawn_positions(count: int, avoid_pos: Vector3 = Vector3.ZE
 	return positions
 
 
-## Возвращает случайную позицию, не пересекающуюся с камнями.
+## Возвращает случайную позицию на навмеше (гарантированно проходимую).
 func get_safe_spawn_position() -> Vector3:
+	# Пробуем через NavigationServer
+	var map_rid: RID = NavigationServer3D.get_maps()[0] if NavigationServer3D.get_maps().size() > 0 else RID()
+	if map_rid.is_valid():
+		for _attempt: int in range(20):
+			var nav_pos: Vector3 = NavigationServer3D.map_get_random_point(map_rid, 1, false)
+			if nav_pos != Vector3.ZERO:
+				nav_pos.y = 0.0
+				return nav_pos
+
+	# Fallback — старый метод
 	var half_x: float = ARENA_SIZE.x / 2.0 - 2.0
 	var half_z: float = ARENA_SIZE.y / 2.0 - 2.0
 	for _attempt: int in range(50):
@@ -268,16 +278,48 @@ func _setup_rocks() -> void:
 
 ## Создаёт NavigationRegion3D с NavigationMesh для AI-навигации.
 func _setup_navigation() -> void:
+	# Большой невидимый пол для бейка навмеша
+	var nav_floor := MeshInstance3D.new()
+	var plane := BoxMesh.new()
+	plane.size = Vector3(ARENA_SIZE.x, 0.1, ARENA_SIZE.y)
+	nav_floor.mesh = plane
 	var nav_region: NavigationRegion3D = NavigationRegion3D.new()
+	add_child(nav_region)
+
+	# Пол внутри nav_region для бейка
+	nav_floor.position = Vector3(0.0, -0.05, 0.0)
+	nav_region.add_child(nav_floor)
+
+	# Копируем камни внутрь nav_region для вырезов
+	for child: Node in _rocks.get_children():
+		if child is StaticBody3D:
+			var obstacle := MeshInstance3D.new()
+			var box_mesh := BoxMesh.new()
+			var col: CollisionShape3D = child.get_child(0) as CollisionShape3D
+			if col != null and col.shape is BoxShape3D:
+				box_mesh.size = (col.shape as BoxShape3D).size
+			obstacle.mesh = box_mesh
+			obstacle.position = child.position + col.position if col != null else child.position
+			nav_region.add_child(obstacle)
 	var nav_mesh: NavigationMesh = NavigationMesh.new()
 
 	nav_mesh.agent_radius = 0.4
-	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nav_mesh.agent_height = 1.0
+	nav_mesh.agent_max_climb = 0.5
+	nav_mesh.cell_size = 0.5
+	nav_mesh.cell_height = 0.5
+	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_BOTH
 
 	nav_region.navigation_mesh = nav_mesh
-	add_child(nav_region)
 
 	nav_region.bake_navigation_mesh.call_deferred()
+	nav_region.bake_finished.connect(func() -> void:
+		print("NavMesh baked: %d polygons, %d vertices" % [nav_mesh.get_polygon_count(), nav_mesh.get_vertices().size()])
+		# Скрываем вспомогательные мешки после бейка
+		for child: Node in nav_region.get_children():
+			if child is MeshInstance3D:
+				(child as MeshInstance3D).visible = false
+	)
 
 
 ## Создаёт DirectionalLight3D для освещения арены.

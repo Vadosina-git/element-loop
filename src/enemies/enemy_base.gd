@@ -32,10 +32,11 @@ const DEATH_SCALE_MAX: float = 3.0
 
 @export var element: ElementTable.Element = ElementTable.Element.FIRE
 @export var level: int = 1
-@export var move_speed: float = 2.33
+@export var move_speed: float = 1.5
 @export var attack_range: float = 0.55
 @export var attack_damage: int = 1
-@export var detection_range: float = 2.0
+@export var detection_range: float = 5.0
+const PULSE_RADIUS: float = 2.0
 
 # --- Публичные переменные ---
 
@@ -55,6 +56,8 @@ var _detection_circle: MeshInstance3D = null
 var _pulse_circle: MeshInstance3D = null
 var _pulse_material: ShaderMaterial = null
 var _is_highlighted: bool = false
+var _nav_update_timer: float = 0.0
+var _cached_move_dir: Vector3 = Vector3.ZERO
 var _element_texture: Texture2D = null
 var _alert_texture: Texture2D = null
 var _is_chasing_icon: bool = false
@@ -92,15 +95,38 @@ func _physics_process(delta: float) -> void:
 	var is_aggressive: bool = current in [EnemyAI.State.CHASE, EnemyAI.State.TELEGRAPH, EnemyAI.State.RECOVER]
 
 	if is_aggressive:
-		# Преследование игрока (даже во время телеграфа и восстановления)
 		if _target != null:
-			var direction: Vector3 = (_target.global_position - global_position)
-			direction.y = 0.0
-			if direction.length() > 0.1:
-				direction = direction.normalized()
+			# Пересчитываем направление раз в 0.3 сек
+			_nav_update_timer -= delta
+			if _nav_update_timer <= 0.0:
+				_nav_update_timer = 0.3
+				var new_dir: Vector3 = Vector3.ZERO
+
+				if _nav_agent != null:
+					_nav_agent.target_position = _target.global_position
+					if not _nav_agent.is_navigation_finished():
+						var next_pos: Vector3 = _nav_agent.get_next_path_position()
+						next_pos.y = global_position.y
+						new_dir = next_pos - global_position
+
+				if new_dir.length_squared() < 0.01:
+					new_dir = _target.global_position - global_position
+					push_warning("Enemy %d: NavMesh fallback — прямое движение к игроку" % enemy_id)
+
+				new_dir.y = 0.0
+				if new_dir.length() > 0.1:
+					_cached_move_dir = new_dir.normalized()
+				else:
+					_cached_move_dir = Vector3.ZERO
+
+			if _cached_move_dir.length() > 0.1:
+				# Плавный поворот — быстрее враг → быстрее поворачивает
+				var current_dir: Vector3 = velocity.normalized() if velocity.length() > 0.1 else _cached_move_dir
 				var speed: float = _get_modified_speed()
-				velocity = direction * speed
-				look_at(global_position + direction, Vector3.UP)
+				var lerp_factor: float = 15.0 * (speed / move_speed)
+				var smooth_dir: Vector3 = current_dir.lerp(_cached_move_dir, lerp_factor * delta).normalized()
+				velocity = smooth_dir * speed
+				look_at(global_position + smooth_dir, Vector3.UP)
 				is_moving = true
 			else:
 				velocity = Vector3.ZERO
@@ -125,13 +151,11 @@ func _physics_process(delta: float) -> void:
 	# Иконка: восклицательный знак при погоне, стихия при патруле
 	_update_chase_icon(is_aggressive)
 
-	# При столкновении с вертикальным препятствием — сменить направление
-	if is_moving:
+	# При столкновении в патруле — смена направления
+	if is_moving and not is_aggressive:
 		for i: int in range(get_slide_collision_count()):
 			var col: KinematicCollision3D = get_slide_collision(i)
-			var normal: Vector3 = col.get_normal()
-			# Пол имеет нормаль вверх (Y~1), стены/камни — горизонтальную
-			if absf(normal.y) < 0.5:
+			if absf(col.get_normal().y) < 0.5:
 				_ai.on_hit_obstacle()
 				break
 
@@ -340,7 +364,7 @@ void fragment() {
 func _setup_pulse_circle() -> void:
 	_pulse_circle = MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	var circle_size: float = detection_range * 2.0
+	var circle_size: float = PULSE_RADIUS * 2.0
 	plane.size = Vector2(circle_size, circle_size)
 	_pulse_circle.mesh = plane
 	_pulse_circle.set_as_top_level(true)
@@ -448,7 +472,7 @@ func _setup_visual() -> void:
 
 	if dummy_mesh != null:
 		_mesh.mesh = dummy_mesh
-		_mesh.scale = Vector3(0.5, 0.5, 0.5)  # Масштаб: высота ~1.1
+		_mesh.scale = Vector3(0.8, 0.8, 0.8)
 		_mesh.position.y = -0.4  # Компенсация: коллизия поднимает CharacterBody3D
 		_mesh.material_override = _material
 	else:
