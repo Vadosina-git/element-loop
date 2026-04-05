@@ -114,6 +114,7 @@ func update_hp(hp: int) -> void:
 		var heart := TextureRect.new()
 		heart.texture = heart_tex
 		heart.custom_minimum_size = Vector2(47, 47)
+		heart.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		heart.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_hearts_row.add_child(heart)
 		_heart_labels.append(heart)
@@ -345,7 +346,8 @@ func _update_element_fly(delta: float) -> void:
 func _start_heart_death(source_heart: Control) -> void:
 	var dying := TextureRect.new()
 	dying.texture = ElementIcons.get_heart_broken_texture()
-	dying.custom_minimum_size = Vector2(70, 70)
+	dying.custom_minimum_size = Vector2(47, 47)
+	dying.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	dying.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	dying.position = source_heart.global_position
 	dying.z_index = 10
@@ -446,9 +448,9 @@ func _update_book_arrows() -> void:
 ## Создаёт стрелку-указатель: стрелка на краю экрана, иконка ближе к центру.
 func _create_icon_arrow(tex: Texture2D) -> Control:
 	var container := Control.new()
-	container.custom_minimum_size = Vector2(46, 24)
-	container.size = Vector2(46, 24)
-	container.pivot_offset = Vector2(23, 12)
+	container.custom_minimum_size = Vector2(96, 58)
+	container.size = Vector2(96, 58)
+	container.pivot_offset = Vector2(48, 29)
 	container.visible = false
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -462,8 +464,8 @@ func _create_icon_arrow(tex: Texture2D) -> Control:
 	icon.anchor_bottom = 0.0
 	icon.offset_left = 0.0
 	icon.offset_top = 0.0
-	icon.offset_right = 24.0
-	icon.offset_bottom = 24.0
+	icon.offset_right = 58.0
+	icon.offset_bottom = 58.0
 	icon.stretch_mode = TextureRect.STRETCH_SCALE
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -472,9 +474,9 @@ func _create_icon_arrow(tex: Texture2D) -> Control:
 	# Стрелка (на краю, т.е. справа)
 	var arrow_label := Label.new()
 	arrow_label.text = ">"
-	arrow_label.add_theme_font_size_override("font_size", 20)
+	arrow_label.add_theme_font_size_override("font_size", 43)
 	arrow_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.8))
-	arrow_label.position = Vector2(26, 0)
+	arrow_label.position = Vector2(60, 8)
 	arrow_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	container.add_child(arrow_label)
 
