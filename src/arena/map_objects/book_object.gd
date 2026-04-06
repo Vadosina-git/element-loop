@@ -37,6 +37,8 @@ var _respawn_timer: float = 0.0
 var _player_in_range: bool = false
 var _vanish_timer: float = 0.0
 var _arena_size: Vector2 = Vector2(36.0, 24.0)
+var _hover_time: float = 0.0
+var _book_model: Node3D = null
 ## Callable для получения доступных стихий (контры живых врагов).
 var get_available_elements: Callable = Callable()
 
@@ -60,6 +62,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Анимация парения книги
+	if _book_model != null and _is_active:
+		_hover_time += delta
+		_book_model.position.y = 0.8 + sin(_hover_time * 2.0) * 0.15
+		_book_model.rotation_degrees.y += delta * 30.0  # Медленное вращение
+
 	if not _is_active:
 		_respawn_timer -= delta
 		if _respawn_timer <= 0.0:
@@ -94,42 +102,27 @@ func stop_hold() -> void:
 
 ## Настраивает визуал книги (столик из KayKit + подпись).
 func _setup_visual() -> void:
-	var table_mesh: Mesh = load("res://assets/kaykit_prototype/table_medium.obj") as Mesh
-	if table_mesh != null:
-		_mesh.mesh = table_mesh
-		_mesh.scale = Vector3(0.4, 0.4, 0.4)
-		_mesh.position.y = 0.0
+	# Загружаем 3D модель Spellbook
+	var scene: PackedScene = load("res://assets/models/Spellbook.glb") as PackedScene
+	if scene != null:
+		_book_model = scene.instantiate() as Node3D
+		_book_model.scale = Vector3(0.5, 0.5, 0.5)
+		_book_model.position.y = 0.8  # Парит в воздухе
+		add_child(_book_model)
+		# Скрываем дефолтный MeshInstance3D
+		_mesh.visible = false
 	else:
+		# Фоллбек
 		var box := BoxMesh.new()
 		box.size = Vector3(0.5, 0.1, 0.4)
 		_mesh.mesh = box
-		_mesh.position.y = 0.5
-
-	# Градиентная заливка: фиолетово-красный
-	var material := ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = "
-shader_type spatial;
-
-uniform vec4 color_top : source_color = vec4(0.6, 0.1, 0.7, 1.0);
-uniform vec4 color_bottom : source_color = vec4(0.8, 0.1, 0.15, 1.0);
-
-void fragment() {
-	float t = clamp(UV.y, 0.0, 1.0);
-	vec3 col = mix(color_bottom.rgb, color_top.rgb, t);
-	ALBEDO = col;
-	METALLIC = 0.3;
-	ROUGHNESS = 0.5;
-}
-"
-	material.shader = shader
-	_mesh.material_override = material
+		_mesh.position.y = 0.8
 
 	# Подпись над книгой
 	_label = Label3D.new()
 	_label.text = "Книга"
 	_label.font_size = 48
-	_label.position.y = 1.0
+	_label.position.y = 1.6
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.modulate = Color(0.9, 0.8, 0.4)
 	_label.no_depth_test = true
@@ -219,6 +212,8 @@ func consume() -> void:
 	_is_active = false
 	_player_in_range = false
 	_mesh.visible = false
+	if _book_model != null:
+		_book_model.visible = false
 	if _label != null:
 		_label.visible = false
 	_respawn_timer = RESPAWN_DELAY
@@ -234,11 +229,12 @@ func cancel_activation() -> void:
 func _respawn() -> void:
 	_is_active = true
 	_mesh.visible = true
+	if _book_model != null:
+		_book_model.visible = true
 	if _label != null:
 		_label.visible = true
 	_respawn_timer = 0.0
 	_move_to_random_position()
-	_reset_vanish_timer()
 
 
 ## Книга исчезает сама (таймер истёк) и перемещается.

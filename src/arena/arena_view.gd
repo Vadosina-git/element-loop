@@ -50,7 +50,7 @@ func _ready() -> void:
 
 ## Создаёт пол арены из KayKit Floor-тайлов + коллизия.
 func _setup_floor() -> void:
-	var floor_mesh: Mesh = load("res://assets/kaykit_prototype/Floor.obj") as Mesh
+	var floor_mesh: Mesh = load("res://assets/kaykit_prototype/Floor_Dirt.obj") as Mesh
 	var tile_scale: float = 0.25  # Уменьшаем тайлы: 4 * 0.25 = 1 юнит
 	var tile_size: float = 4.0 * tile_scale
 	var tiles_x: int = ceili(ARENA_SIZE.x / tile_size)
@@ -70,6 +70,7 @@ func _setup_floor() -> void:
 			tile.mesh = floor_mesh
 			tile.material_override = floor_material
 			tile.scale = Vector3(tile_scale, tile_scale, tile_scale)
+			tile.rotation_degrees.y = float(randi() % 4) * 90.0
 			tile.position = Vector3(
 				offset_x + ix * tile_size,
 				-0.5 * tile_scale,
@@ -244,6 +245,10 @@ func _is_position_safe(pos: Vector3) -> bool:
 func _setup_rocks() -> void:
 	var cube_mesh: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_A.obj") as Mesh
 	var cube_mesh_b: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_B.obj") as Mesh
+	var single_meshes: Array[Mesh] = [
+		load("res://assets/kaykit_prototype/Pallet_Small_Decorated_A.obj") as Mesh,
+		load("res://assets/kaykit_prototype/Pallet_Small_Decorated_B.obj") as Mesh,
+	]
 	# Тёплый материал камней (Cozy Grove style)
 	var rock_material := StandardMaterial3D.new()
 	rock_material.albedo_color = Color.html("#5A4A3A")
@@ -269,10 +274,15 @@ func _setup_rocks() -> void:
 			var rock_scale: float = 0.25
 
 			var mesh_inst := MeshInstance3D.new()
-			mesh_inst.mesh = cube_mesh if (gx + gz) % 2 == 0 else cube_mesh_b
-			mesh_inst.material_override = rock_material
+			if ridge.length <= 2:
+				mesh_inst.mesh = single_meshes[(gx + gz + i) % single_meshes.size()]
+				mesh_inst.scale = Vector3(0.5, 0.5, 0.5)
+				mesh_inst.rotation_degrees.y = float(randi() % 4) * 90.0
+			else:
+				mesh_inst.mesh = cube_mesh if (gx + gz) % 2 == 0 else cube_mesh_b
+				mesh_inst.scale = Vector3(rock_scale, rock_scale, rock_scale)
+				mesh_inst.material_override = rock_material
 			mesh_inst.position = world_pos
-			mesh_inst.scale = Vector3(rock_scale, rock_scale, rock_scale)
 			_rocks.add_child(mesh_inst)
 
 			# Коллизия — высокий бокс, чтобы персонаж не мог пройти

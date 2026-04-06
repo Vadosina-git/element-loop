@@ -19,10 +19,10 @@ const MIN_GAP: int = 2
 const SAFE_ZONE_RADIUS: int = 1
 
 ## Минимальная длина гряды камней.
-const MIN_RIDGE_LENGTH: int = 1
+const MIN_RIDGE_LENGTH: int = 3
 
 ## Максимальная длина гряды камней.
-const MAX_RIDGE_LENGTH: int = 10
+const MAX_RIDGE_LENGTH: int = 12
 
 ## Количество попыток размещения одной гряды.
 const MAX_PLACEMENT_ATTEMPTS: int = 30

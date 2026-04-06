@@ -98,6 +98,7 @@ func _ready() -> void:
 	_setup_collision()
 	_setup_visual()
 	_setup_dash_particles()
+	_setup_ground_indicator()
 
 
 func _physics_process(delta: float) -> void:
@@ -363,6 +364,83 @@ func _start_jump_anim() -> void:
 func _set_model_visibility(vis: bool) -> void:
 	if _mesh_node != null:
 		_mesh_node.visible = vis
+
+
+## Создаёт индикатор под ногами персонажа (Brawl Stars style).
+func _setup_ground_indicator() -> void:
+	var indicator := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(2.8, 2.8)
+	indicator.mesh = plane
+	indicator.position = Vector3(0.0, 0.02, 0.0)
+
+	var shader := Shader.new()
+	shader.code = "
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_opaque;
+
+uniform vec4 indicator_color : source_color = vec4(0.2, 1.0, 0.33, 1.0);
+uniform float gradient_radius : hint_range(0.1, 1.0) = 0.45;
+uniform float rotation_speed : hint_range(0.0, 5.0) = 0.17;
+uniform float star_alpha : hint_range(0.0, 1.0) = 0.2;
+uniform float ring_width : hint_range(0.05, 0.5) = 0.15;
+
+// Шестиконечная звезда (два наложенных треугольника)
+float triangle(vec2 p, float size) {
+	float k = sqrt(3.0);
+	p.x = abs(p.x) - size;
+	p.y = p.y + size / k;
+	if (p.x + k * p.y > 0.0) {
+		p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+	}
+	p.x -= clamp(p.x, -2.0 * size, 0.0);
+	return -length(p) * sign(p.y);
+}
+
+float hexagram(vec2 p, float size) {
+	float d1 = triangle(p, size);
+	float d2 = triangle(vec2(p.x, -p.y), size);
+	return min(d1, d2);
+}
+
+void fragment() {
+	vec2 uv = UV - vec2(0.5);
+	float dist = length(uv) * 2.0;
+
+	// Вращение
+	float angle = TIME * rotation_speed;
+	float ca = cos(angle);
+	float sa = sin(angle);
+	vec2 ruv = vec2(uv.x * ca - uv.y * sa, uv.x * sa + uv.y * ca);
+
+	// Круг-маска
+	float circle = 1.0 - smoothstep(0.9, 1.0, dist);
+
+	// Тонкое неоновое кольцо
+	float edge = 0.44;
+	float ring = exp(-pow((dist - edge) * 8.0, 2.0)) * 0.6;
+	float inner_fill = (1.0 - smoothstep(0.0, 0.44, dist)) * 0.05;
+	float alpha = (ring + inner_fill) * step(dist, 0.5);
+
+	// Звезда
+	float star = hexagram(ruv, 0.15);
+	float star_mask = 1.0 - smoothstep(-0.01, 0.01, star);
+	float center_hole = smoothstep(0.08, 0.10, length(ruv));
+	star_mask *= center_hole;
+	alpha += star_mask * star_alpha * step(dist, 0.5);
+
+	// Общая прозрачность
+	alpha *= 0.56;
+
+	ALBEDO = indicator_color.rgb;
+	ALPHA = alpha;
+}
+"
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	indicator.material_override = mat
+	indicator.set_as_top_level(false)
+	add_child(indicator)
 
 
 ## Создаёт систему частиц дыма для рывка.
