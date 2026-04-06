@@ -19,6 +19,8 @@ var _player: PlayerCharacter = null
 var _player_input: PlayerInput = null
 var _hud: HUD = null
 var _joystick: VirtualJoystick = null
+var _post_processing: PostProcessing = null
+var _outline_manager: OutlineManager = OutlineManager.new()
 var _books: Array[BookObject] = []
 var _combat_logic: CombatLogic = CombatLogic.new()
 var _zone_logic: ZoneLogic = ZoneLogic.new()
@@ -75,6 +77,13 @@ func _ready() -> void:
 	_hud.prev_character_pressed.connect(_player.prev_character)
 	_player.character_changed.connect(_hud.update_character_name)
 
+	# Пост-обработка (Cozy Grove style)
+	_post_processing = PostProcessing.new()
+	add_child(_post_processing)
+
+	# Подключаем панель освещения
+	_hud.setup_lighting(_arena.main_light, _arena.fill_light, _arena.world_environment, _post_processing, _arena, _outline_manager)
+
 	# Подключаем пресеты камеры
 	_hud.camera_preset_selected.connect(_on_camera_preset_selected)
 	_hud.setup_camera_presets(_arena._camera.get_preset_names(), _arena._camera.current_preset)
@@ -89,6 +98,32 @@ func _ready() -> void:
 	for eid: int in _enemies:
 		enemy_list.append(_enemies[eid] as EnemyBase)
 	_hud.setup_enemy_tracking(enemy_list)
+
+	# Регистрируем объекты для outline
+	for child: Node in _arena._rocks.get_children():
+		if child is MeshInstance3D:
+			_outline_manager.register(child, "Камни")
+
+	for eid: int in _enemies:
+		var enemy: EnemyBase = _enemies[eid] as EnemyBase
+		if enemy._mesh != null:
+			_outline_manager.register(enemy._mesh, "Враги")
+
+	# Персонаж — вся модель
+	if _player._mesh_node != null:
+		_outline_manager.register(_player._mesh_node, "Персонаж")
+
+	# Книги
+	for book: BookObject in _books:
+		if book._mesh != null:
+			_outline_manager.register(book._mesh, "Книги")
+
+	# Дефолтные outline: персонаж, враги, книги
+	_outline_manager.set_width(0.03)
+	_outline_manager.set_color(Color(0.0, 0.0, 0.0))
+	_outline_manager.set_category_enabled("Персонаж", true)
+	_outline_manager.set_category_enabled("Враги", true)
+	_outline_manager.set_category_enabled("Книги", true)
 
 	# Подключаем сигналы боевой логики
 	_combat_logic.enemy_marked.connect(_on_enemy_marked)
@@ -361,6 +396,10 @@ func _on_restart_pressed() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event as InputEventKey
-		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_R:
-			get_viewport().set_input_as_handled()
-			_on_restart_pressed()
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_R:
+				get_viewport().set_input_as_handled()
+				_on_restart_pressed()
+			elif key_event.keycode == KEY_L:
+				get_viewport().set_input_as_handled()
+				_hud.toggle_lighting_panel()

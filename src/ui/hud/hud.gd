@@ -36,6 +36,7 @@ var _enemy_arrows: Array[Control] = []
 var _current_element: int = -1
 var _element_texture_rect: TextureRect = null
 var _element_picker: ElementPicker = null
+var _lighting_panel: LightingPanel = null
 var _heart_labels: Array[Control] = []
 var _dying_hearts: Array[Dictionary] = []
 var _flying_element: TextureRect = null
@@ -78,6 +79,7 @@ func _ready() -> void:
 	_dash_button.pressed.connect(_on_dash_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_setup_element_picker()
+	_setup_lighting_panel()
 	_prev_char_btn.pressed.connect(func() -> void: prev_character_pressed.emit())
 	_next_char_btn.pressed.connect(func() -> void: next_character_pressed.emit())
 	update_hp(2)
@@ -225,6 +227,32 @@ func play_element_fly(element: int, from_pos: Vector2 = Vector2.ZERO) -> void:
 		_fly_from = viewport_size / 2.0 - Vector2(32, 32)
 	_fly_to = _element_slot.global_position
 	_flying_element.position = _fly_from
+
+
+## Создаёт панель настройки освещения.
+func _setup_lighting_panel() -> void:
+	_lighting_panel = LightingPanel.new()
+	_lighting_panel.anchor_left = 1.0
+	_lighting_panel.anchor_right = 1.0
+	_lighting_panel.anchor_top = 0.5
+	_lighting_panel.anchor_bottom = 0.5
+	_lighting_panel.offset_left = -450.0
+	_lighting_panel.offset_top = -250.0
+	_lighting_panel.offset_right = -10.0
+	_lighting_panel.offset_bottom = 250.0
+	_lighting_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_lighting_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(_lighting_panel)
+
+
+## Подключает панель освещения к источникам света.
+func setup_lighting(main_l: DirectionalLight3D, fill_l: DirectionalLight3D, env: Environment, post_proc: PostProcessing = null, arena: ArenaView = null, outline_mgr: OutlineManager = null) -> void:
+	_lighting_panel.setup(main_l, fill_l, env, post_proc, arena, outline_mgr)
+
+
+## Переключает панель освещения.
+func toggle_lighting_panel() -> void:
+	_lighting_panel.toggle()
 
 
 ## Обновляет имя текущего персонажа.

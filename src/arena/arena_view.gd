@@ -17,10 +17,6 @@ const WALL_THICKNESS: float = 0.5
 
 const FLOOR_COLOR: Color = Color(0.15, 0.12, 0.1)
 const WALL_COLOR: Color = Color(0.2, 0.18, 0.15)
-const BG_COLOR: Color = Color(0.05, 0.12, 0.05)
-const AMBIENT_COLOR: Color = Color(0.3, 0.25, 0.2)
-const AMBIENT_ENERGY: float = 0.4
-const LIGHT_ENERGY: float = 0.8
 
 ## Количество каменных гряд на арене.
 const RIDGE_COUNT: int = 1080
@@ -33,6 +29,10 @@ var _occupied_cells: Dictionary = {}
 @onready var _walls: Node3D = $Walls
 @onready var _rocks: Node3D = $Rocks
 @onready var _camera: ArenaCamera = $ArenaCamera
+
+var main_light: DirectionalLight3D = null
+var fill_light: DirectionalLight3D = null
+var world_environment: Environment = null
 
 
 # --- Встроенные колбеки ---
@@ -58,10 +58,17 @@ func _setup_floor() -> void:
 	var offset_x: float = -(tiles_x * tile_size) / 2.0 + tile_size / 2.0
 	var offset_z: float = -(tiles_z * tile_size) / 2.0 + tile_size / 2.0
 
+	# Тёплый материал пола (Cozy Grove style)
+	var floor_material := StandardMaterial3D.new()
+	floor_material.albedo_color = Color.html("#3D2E1F")
+	floor_material.roughness = 0.9
+	floor_material.metallic = 0.0
+
 	for ix: int in range(tiles_x):
 		for iz: int in range(tiles_z):
 			var tile: MeshInstance3D = MeshInstance3D.new()
 			tile.mesh = floor_mesh
+			tile.material_override = floor_material
 			tile.scale = Vector3(tile_scale, tile_scale, tile_scale)
 			tile.position = Vector3(
 				offset_x + ix * tile_size,
@@ -237,6 +244,11 @@ func _is_position_safe(pos: Vector3) -> bool:
 func _setup_rocks() -> void:
 	var cube_mesh: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_A.obj") as Mesh
 	var cube_mesh_b: Mesh = load("res://assets/kaykit_prototype/Cube_Prototype_Large_B.obj") as Mesh
+	# Тёплый материал камней (Cozy Grove style)
+	var rock_material := StandardMaterial3D.new()
+	rock_material.albedo_color = Color.html("#5A4A3A")
+	rock_material.roughness = 0.85
+	rock_material.metallic = 0.0
 
 	var ridges: Array[MazeGenerator.Ridge] = MazeGenerator.generate(ARENA_SIZE, RIDGE_COUNT)
 
@@ -258,6 +270,7 @@ func _setup_rocks() -> void:
 
 			var mesh_inst := MeshInstance3D.new()
 			mesh_inst.mesh = cube_mesh if (gx + gz) % 2 == 0 else cube_mesh_b
+			mesh_inst.material_override = rock_material
 			mesh_inst.position = world_pos
 			mesh_inst.scale = Vector3(rock_scale, rock_scale, rock_scale)
 			_rocks.add_child(mesh_inst)
@@ -322,25 +335,70 @@ func _setup_navigation() -> void:
 	)
 
 
-## Создаёт DirectionalLight3D для освещения арены.
+## Создаёт освещение арены: тёплый main + холодный fill (Cozy Grove style).
 func _setup_lighting() -> void:
-	var light: DirectionalLight3D = DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-60.0, 30.0, 0.0)
-	light.light_energy = LIGHT_ENERGY
-	light.shadow_enabled = true
-	add_child(light)
+	# Основной свет — тёплый, мягкие акварельные тени
+	main_light = DirectionalLight3D.new()
+	main_light.rotation_degrees = Vector3(-65.0, 130.0, 0.0)
+	main_light.light_energy = 1.3
+	main_light.light_color = Color.html("#FFE8C8")  # Тёплый кремовый
+	main_light.shadow_enabled = true
+	main_light.shadow_blur = 2.0
+	main_light.shadow_bias = 0.05
+	main_light.directional_shadow_max_distance = 60.0
+	add_child(main_light)
+
+	# Заполняющий свет — холодный голубой, мягкий
+	fill_light = DirectionalLight3D.new()
+	fill_light.rotation_degrees = Vector3(-35.0, 310.0, 0.0)
+	fill_light.light_energy = 0.25
+	fill_light.light_color = Color.html("#B0C0E0")  # Холодный голубой
+	fill_light.shadow_enabled = false
+	add_child(fill_light)
 
 
-## Создаёт WorldEnvironment с тёмным фоном и мягким ambient-светом.
+## Создаёт WorldEnvironment — Cozy Grove атмосфера.
 func _setup_environment() -> void:
 	var world_env: WorldEnvironment = WorldEnvironment.new()
-	var env: Environment = Environment.new()
+	world_environment = Environment.new()
+	var env: Environment = world_environment
 
+	# Тёмный тёплый фон
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = BG_COLOR
+	env.background_color = Color.html("#0A0806")
+
+	# Тёплый кремовый ambient
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = AMBIENT_COLOR
-	env.ambient_light_energy = AMBIENT_ENERGY
+	env.ambient_light_color = Color.html("#D4C8B0")
+	env.ambient_light_energy = 0.6
+
+	# SSAO — мягкие тени у основания (не агрессивные)
+	env.ssao_enabled = true
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 1.5
+	env.ssao_power = 1.2
+	env.ssao_detail = 0.5
+
+	# Glow — лёгкий bloom на тёплых цветах
+	env.glow_enabled = true
+	env.glow_intensity = 0.3
+	env.glow_bloom = 0.05
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_hdr_threshold = 0.9
+
+	# Filmic tone mapping
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.0
+	env.tonemap_white = 1.0
+
+	# Лёгкий тёплый туман
+	env.fog_enabled = true
+	env.fog_light_color = Color.html("#1A140E")
+	env.fog_density = 0.001
+	env.fog_aerial_perspective = 0.05
 
 	world_env.environment = env
 	add_child(world_env)
+
+
+## Создаёт outline + posterization пост-эффект на камере.
