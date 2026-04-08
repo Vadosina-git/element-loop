@@ -40,6 +40,7 @@ func _ready() -> void:
 	_setup_floor()
 	_setup_walls()
 	_setup_rocks()
+	_setup_floor_decor()
 	_setup_navigation()
 	_setup_lighting()
 	_setup_environment()
@@ -297,6 +298,51 @@ func _setup_rocks() -> void:
 			col_shape.position = Vector3(0.0, 1.0, 0.0)
 			body.add_child(col_shape)
 			_rocks.add_child(body)
+
+
+## Раскладывает декоративные камни (Path.glb) на свободных тайлах пола.
+func _setup_floor_decor() -> void:
+	var scene: PackedScene = load("res://assets/models/Trapdoor.glb") as PackedScene
+	if scene == null:
+		push_warning("Trapdoor.glb не найден, декор пропущен")
+		return
+
+	var decor_chance: float = 0.001
+	var tile_size: float = 4.0 * 0.25
+	var grid_w: int = floori(ARENA_SIZE.x / MazeGenerator.CELL_SIZE)
+	var grid_h: int = floori(ARENA_SIZE.y / MazeGenerator.CELL_SIZE)
+
+	for gx: int in range(2, grid_w - 2):
+		for gz: int in range(2, grid_h - 2):
+			if _occupied_cells.has(Vector2i(gx, gz)):
+				continue
+			if randf() > decor_chance:
+				continue
+			var world_pos: Vector3 = MazeGenerator.grid_to_world(gx, gz, ARENA_SIZE)
+			var decor: Node3D = scene.instantiate() as Node3D
+			decor.scale = Vector3(1.0, 1.0, 1.0)
+			decor.position = Vector3(world_pos.x, 0.0, world_pos.z)
+			decor.rotation_degrees.y = float(randi() % 4) * 90.0
+			_apply_unlit(decor)
+			_floor.add_child(decor)
+
+
+## Рекурсивно убирает блики с материалов MeshInstance3D (сохраняя освещение).
+func _apply_unlit(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node as MeshInstance3D
+		var mesh: Mesh = mi.mesh
+		if mesh != null:
+			for surf_idx: int in range(mesh.get_surface_count()):
+				var orig: Material = mesh.surface_get_material(surf_idx)
+				if orig is StandardMaterial3D:
+					var copy: StandardMaterial3D = (orig as StandardMaterial3D).duplicate() as StandardMaterial3D
+					copy.metallic = 0.0
+					copy.metallic_specular = 0.0
+					copy.roughness = 1.0
+					mi.set_surface_override_material(surf_idx, copy)
+	for child: Node in node.get_children():
+		_apply_unlit(child)
 
 
 ## Создаёт NavigationRegion3D с NavigationMesh для AI-навигации.

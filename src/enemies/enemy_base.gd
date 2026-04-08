@@ -360,6 +360,7 @@ void fragment() {
 	var bright: Color = color.lightened(0.3)
 	mat.set_shader_parameter("circle_color", Color(bright.r, bright.g, bright.b, 1.0))
 
+	mat.render_priority = 1
 	_detection_circle.material_override = mat
 	add_child(_detection_circle)
 
@@ -407,18 +408,19 @@ void fragment() {
 	var bright: Color = color.lightened(0.4)
 	_pulse_material.set_shader_parameter("pulse_color", Color(bright.r, bright.g, bright.b, 0.45))
 
+	_pulse_material.render_priority = 1
 	_pulse_circle.material_override = _pulse_material
 	add_child(_pulse_circle)
 
 
 ## Обновляет позицию кругов (top-level, не вращаются с врагом).
 func _update_detection_circle() -> void:
-	var flat_pos: Vector3 = Vector3(global_position.x, 0.02, global_position.z)
+	var flat_pos: Vector3 = Vector3(global_position.x, 0.25, global_position.z)
 	if _detection_circle != null:
 		_detection_circle.global_position = flat_pos
 		_detection_circle.global_rotation = Vector3.ZERO
 	if _pulse_circle != null and _pulse_circle.visible:
-		_pulse_circle.global_position = Vector3(flat_pos.x, 0.1, flat_pos.z)
+		_pulse_circle.global_position = Vector3(flat_pos.x, 0.3, flat_pos.z)
 		_pulse_circle.global_rotation = Vector3.ZERO
 
 

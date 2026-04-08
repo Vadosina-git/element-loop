@@ -542,7 +542,7 @@ func _setup_ground_indicator() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(2.8, 2.8)
 	indicator.mesh = plane
-	indicator.position = Vector3(0.0, 0.02, 0.0)
+	indicator.position = Vector3(0.0, 0.25, 0.0)
 
 	var shader := Shader.new()
 	shader.code = "
@@ -608,6 +608,7 @@ void fragment() {
 "
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
+	mat.render_priority = 1
 	indicator.material_override = mat
 	indicator.set_as_top_level(false)
 	add_child(indicator)
