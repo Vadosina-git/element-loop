@@ -325,23 +325,31 @@ func _setup_detection_circle() -> void:
 	var shader := Shader.new()
 	shader.code = "
 shader_type spatial;
-render_mode unshaded, cull_disabled;
+render_mode unshaded, blend_mix, cull_disabled;
 
-uniform vec4 circle_color : source_color = vec4(1.0, 0.3, 0.3, 0.4);
-uniform float ring_width = 0.015;
-uniform float dash_count = 24.0;
-uniform float dash_ratio = 0.5;
+uniform vec4 circle_color : source_color = vec4(1.0, 0.3, 0.3, 1.0);
+uniform float time_scale = 0.5;
+uniform float ring_count = 3.0;
+uniform float ring_width = 0.5;
 
 void fragment() {
 	vec2 uv_centered = UV - vec2(0.5);
 	float dist = length(uv_centered) * 2.0;
-	float angle = atan(uv_centered.y, uv_centered.x);
-	float normalized_angle = (angle + 3.14159) / (2.0 * 3.14159);
 
-	float ring_mask = step(1.0 - ring_width * 2.0, dist) * step(dist, 1.0);
-	float dash_mask = step(fract(normalized_angle * dash_count), dash_ratio);
+	// Неоновое кольцо по краю (Brawl Stars style)
+	float edge = 0.88;
+	float sharp_line = (1.0 - smoothstep(0.0, 0.008, abs(dist - edge))) * 0.64;
+	float inner_fill = (1.0 - smoothstep(0.0, 0.88, dist)) * 0.024;
 
-	float alpha = ring_mask * dash_mask * circle_color.a;
+	// Пульсирующие волны от центра
+	float wave = fract(dist * ring_count - TIME * time_scale);
+	float pulse = smoothstep(0.0, ring_width, wave) * (1.0 - smoothstep(ring_width, ring_width * 2.0, wave));
+	float fade = 1.0 - dist;
+	float pulse_alpha = pulse * fade * 0.15;
+
+	float base_fill = step(dist, 0.88) * 0.064;
+	float alpha = (sharp_line + inner_fill + pulse_alpha + base_fill) * step(dist, 1.0) * 0.7;
+
 	ALBEDO = circle_color.rgb;
 	ALPHA = alpha;
 }
@@ -349,7 +357,8 @@ void fragment() {
 	var mat := ShaderMaterial.new()
 	mat.shader = shader
 	var color: Color = ELEMENT_COLORS.get(element, Color.WHITE)
-	mat.set_shader_parameter("circle_color", Color(color.r, color.g, color.b, 0.4))
+	var bright: Color = color.lightened(0.3)
+	mat.set_shader_parameter("circle_color", Color(bright.r, bright.g, bright.b, 1.0))
 
 	_detection_circle.material_override = mat
 	add_child(_detection_circle)

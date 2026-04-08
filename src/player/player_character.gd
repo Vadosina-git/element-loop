@@ -90,6 +90,9 @@ const ACCELERATION: float = 15.0
 const DECELERATION: float = 10.0
 var _dash_start_pos: Vector3 = Vector3.ZERO
 var _dash_particles: GPUParticles3D = null
+var _element_ring: Node3D = null
+var _element_ring_material: StandardMaterial3D = null
+var _element_ring_cap_material: StandardMaterial3D = null
 
 
 # --- Встроенные колбеки ---
@@ -99,9 +102,15 @@ func _ready() -> void:
 	_setup_visual()
 	_setup_dash_particles()
 	_setup_ground_indicator()
+	_setup_element_ring()
 
 
 func _physics_process(delta: float) -> void:
+	# Кольцо стихии следует за игроком (top_level)
+	if _element_ring != null and _element_ring.visible:
+		_element_ring.global_position = Vector3(global_position.x, 0.05, global_position.z)
+		_element_ring.rotate_y(delta * 2.5)
+
 	# Победный танец
 	if _is_dancing:
 		_dance_timer += delta
@@ -204,6 +213,7 @@ func pickup_element(element: int) -> void:
 	current_element = element
 	has_zone_charge = true
 	element_changed.emit(current_element)
+	_update_element_ring()
 
 
 ## Ставит зону текущей стихии под собой.
@@ -217,6 +227,7 @@ func place_zone() -> bool:
 	current_element = -1
 	zone_placed.emit(placed_element, placed_position)
 	element_changed.emit(current_element)
+	_update_element_ring()
 	# Анимация постановки (только если не прыгаем)
 	if not _is_placing_zone:
 		_is_placing_zone = true
@@ -364,6 +375,165 @@ func _start_jump_anim() -> void:
 func _set_model_visibility(vis: bool) -> void:
 	if _mesh_node != null:
 		_mesh_node.visible = vis
+
+
+## Создаёт dashed кольцо стихии вокруг игрока (4 дуги как 3D геометрия).
+func _setup_element_ring() -> void:
+	_element_ring = Node3D.new()
+	_element_ring.position = Vector3(0.0, 0.05, 0.0)
+	_element_ring.set_as_top_level(true)
+	_element_ring.visible = false
+
+	var ring_radius: float = 0.75
+	var tube_radius: float = 0.06
+	var segments: int = 4
+	var gap_degrees: float = 30.0
+	var arc_degrees: float = (360.0 / segments) - gap_degrees
+
+	_element_ring_material = StandardMaterial3D.new()
+	_element_ring_material.albedo_color = Color(1.0, 0.3, 0.3)
+	_element_ring_material.emission_enabled = true
+	_element_ring_material.emission = Color(1.0, 0.3, 0.3)
+	_element_ring_material.emission_energy_multiplier = 0.5
+
+	_element_ring_cap_material = StandardMaterial3D.new()
+	_element_ring_cap_material.albedo_color = Color(0.7, 0.2, 0.07)
+	_element_ring_cap_material.emission_enabled = true
+	_element_ring_cap_material.emission = Color(0.7, 0.2, 0.07)
+	_element_ring_cap_material.emission_energy_multiplier = 0.3
+
+	for i: int in range(segments):
+		var start_angle: float = i * (360.0 / segments)
+		var arc_mesh: MeshInstance3D = _create_arc_segment(ring_radius, tube_radius, start_angle, arc_degrees)
+		_element_ring.add_child(arc_mesh)
+		var caps_mesh: MeshInstance3D = _create_arc_caps(ring_radius, tube_radius, start_angle, arc_degrees)
+		caps_mesh.material_override = _element_ring_cap_material
+		_element_ring.add_child(caps_mesh)
+
+	add_child(_element_ring)
+
+
+## Создаёт один сегмент дуги тора.
+func _create_arc_segment(ring_r: float, tube_r: float, start_deg: float, arc_deg: float) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var arc_steps: int = 32
+	var tube_steps: int = 8
+
+	for i: int in range(arc_steps + 1):
+		var arc_angle: float = deg_to_rad(start_deg + arc_deg * float(i) / arc_steps)
+		var center := Vector3(cos(arc_angle) * ring_r, 0.0, sin(arc_angle) * ring_r)
+		var normal_base := Vector3(cos(arc_angle), 0.0, sin(arc_angle))
+
+		for j: int in range(tube_steps + 1):
+			var tube_angle: float = TAU * float(j) / tube_steps
+			var offset: Vector3 = normal_base * cos(tube_angle) * tube_r + Vector3.UP * sin(tube_angle) * tube_r
+			var vertex: Vector3 = center + offset
+			var normal: Vector3 = offset.normalized()
+			st.set_normal(normal)
+			st.add_vertex(vertex)
+
+	for i: int in range(arc_steps):
+		for j: int in range(tube_steps):
+			var a: int = i * (tube_steps + 1) + j
+			var b: int = a + 1
+			var c: int = a + (tube_steps + 1)
+			var d: int = c + 1
+			st.add_index(a)
+			st.add_index(c)
+			st.add_index(b)
+			st.add_index(b)
+			st.add_index(c)
+			st.add_index(d)
+
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = st.commit()
+	mesh_inst.material_override = _element_ring_material
+	return mesh_inst
+
+
+## Создаёт заглушки (caps) на концах дуги тора.
+func _create_arc_caps(ring_r: float, tube_r: float, start_deg: float, arc_deg: float) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var tube_steps: int = 8
+	var arc_steps: int = 32
+
+	# Начальный cap
+	var start_arc_angle: float = deg_to_rad(start_deg)
+	var cap_center_pos: Vector3 = Vector3(cos(start_arc_angle) * ring_r, 0.0, sin(start_arc_angle) * ring_r)
+	var normal_base_start: Vector3 = Vector3(cos(start_arc_angle), 0.0, sin(start_arc_angle))
+	var cap_normal_start: Vector3 = -Vector3(-sin(start_arc_angle), 0.0, cos(start_arc_angle))
+
+	# Центр начального cap
+	st.set_normal(cap_normal_start)
+	st.add_vertex(cap_center_pos)
+	# Вершины кольца начального cap
+	for j: int in range(tube_steps + 1):
+		var tube_angle: float = TAU * float(j) / tube_steps
+		var offset: Vector3 = normal_base_start * cos(tube_angle) * tube_r + Vector3.UP * sin(tube_angle) * tube_r
+		st.set_normal(cap_normal_start)
+		st.add_vertex(cap_center_pos + offset)
+	# Треугольники начального cap
+	for j: int in range(tube_steps):
+		st.add_index(0)
+		st.add_index(1 + j)
+		st.add_index(1 + (j + 1) % (tube_steps + 1))
+
+	# Конечный cap
+	var end_arc_angle: float = deg_to_rad(start_deg + arc_deg)
+	var cap_center_pos_end: Vector3 = Vector3(cos(end_arc_angle) * ring_r, 0.0, sin(end_arc_angle) * ring_r)
+	var normal_base_end: Vector3 = Vector3(cos(end_arc_angle), 0.0, sin(end_arc_angle))
+	var cap_normal_end: Vector3 = Vector3(-sin(end_arc_angle), 0.0, cos(end_arc_angle))
+
+	var base_idx: int = tube_steps + 2
+	# Центр конечного cap
+	st.set_normal(cap_normal_end)
+	st.add_vertex(cap_center_pos_end)
+	# Вершины кольца конечного cap
+	for j: int in range(tube_steps + 1):
+		var tube_angle: float = TAU * float(j) / tube_steps
+		var offset: Vector3 = normal_base_end * cos(tube_angle) * tube_r + Vector3.UP * sin(tube_angle) * tube_r
+		st.set_normal(cap_normal_end)
+		st.add_vertex(cap_center_pos_end + offset)
+	# Треугольники конечного cap (обратный порядок)
+	for j: int in range(tube_steps):
+		st.add_index(base_idx)
+		st.add_index(base_idx + 1 + (j + 1) % (tube_steps + 1))
+		st.add_index(base_idx + 1 + j)
+
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.mesh = st.commit()
+	return mesh_inst
+
+
+## Обновляет видимость и цвет кольца стихии.
+func _update_element_ring() -> void:
+	if _element_ring == null:
+		return
+	if current_element >= 0 and has_zone_charge:
+		_element_ring.visible = true
+		var el: ElementTable.Element = current_element as ElementTable.Element
+		var colors: Dictionary = {
+			ElementTable.Element.FIRE: Color(0.9, 0.2, 0.1),
+			ElementTable.Element.WATER: Color(0.1, 0.4, 0.9),
+			ElementTable.Element.TREE: Color(0.2, 0.7, 0.2),
+			ElementTable.Element.EARTH: Color(0.6, 0.4, 0.2),
+			ElementTable.Element.METAL: Color(0.7, 0.7, 0.7),
+		}
+		var color: Color = colors.get(el, Color.WHITE)
+		var bright: Color = color.lightened(0.3)
+		_element_ring_material.albedo_color = bright
+		_element_ring_material.emission = bright
+		# Заглушки — на тон темнее основного цвета
+		if _element_ring_cap_material != null:
+			var dark: Color = color.darkened(0.15)
+			_element_ring_cap_material.albedo_color = dark
+			_element_ring_cap_material.emission = dark
+	else:
+		_element_ring.visible = false
 
 
 ## Создаёт индикатор под ногами персонажа (Brawl Stars style).
