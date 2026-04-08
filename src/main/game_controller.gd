@@ -397,9 +397,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event as InputEventKey
 		if key_event.pressed and not key_event.echo:
-			if key_event.keycode == KEY_R:
+			if key_event.keycode == KEY_R or key_event.physical_keycode == KEY_R:
 				get_viewport().set_input_as_handled()
 				_on_restart_pressed()
-			elif key_event.keycode == KEY_L:
+			elif key_event.keycode == KEY_L or key_event.physical_keycode == KEY_L:
 				get_viewport().set_input_as_handled()
 				_hud.toggle_lighting_panel()

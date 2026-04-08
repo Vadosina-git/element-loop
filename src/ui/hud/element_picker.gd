@@ -120,13 +120,13 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key: InputEventKey = event as InputEventKey
 		if key.pressed and not key.echo:
-			if key.keycode == KEY_A or key.keycode == KEY_LEFT:
+			if key.keycode == KEY_A or key.physical_keycode == KEY_A or key.keycode == KEY_LEFT:
 				get_viewport().set_input_as_handled()
 				_on_element_chosen(_option1)
-			elif key.keycode == KEY_D or key.keycode == KEY_RIGHT:
+			elif key.keycode == KEY_D or key.physical_keycode == KEY_D or key.keycode == KEY_RIGHT:
 				get_viewport().set_input_as_handled()
 				_on_element_chosen(_option2)
-			elif key.keycode == KEY_ESCAPE:
+			elif key.keycode == KEY_ESCAPE or key.physical_keycode == KEY_ESCAPE:
 				get_viewport().set_input_as_handled()
 				_on_decline()
 

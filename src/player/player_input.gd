@@ -79,11 +79,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event: InputEventKey = event as InputEventKey
 		if key_event.pressed and not key_event.echo:
-			if key_event.keycode == KEY_SPACE:
+			if key_event.keycode == KEY_SPACE or key_event.physical_keycode == KEY_SPACE:
 				zone_button_pressed.emit()
 				get_viewport().set_input_as_handled()
 				return
-			if key_event.keycode == KEY_SHIFT:
+			if key_event.keycode == KEY_SHIFT or key_event.physical_keycode == KEY_SHIFT:
 				dash_pressed.emit()
 				get_viewport().set_input_as_handled()
 				return
@@ -106,13 +106,13 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Считывает направление с клавиатуры (WASD / стрелки).
 func _get_keyboard_direction() -> Vector2:
 	var dir := Vector2.ZERO
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+	if Input.is_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 		dir.y -= 1.0
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+	if Input.is_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		dir.y += 1.0
-	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+	if Input.is_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		dir.x -= 1.0
-	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+	if Input.is_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		dir.x += 1.0
 	return dir.normalized()
 
