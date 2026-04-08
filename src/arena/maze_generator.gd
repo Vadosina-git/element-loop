@@ -19,10 +19,13 @@ const MIN_GAP: int = 2
 const SAFE_ZONE_RADIUS: int = 1
 
 ## Минимальная длина гряды камней.
-const MIN_RIDGE_LENGTH: int = 3
+const MIN_RIDGE_LENGTH: int = 1
 
 ## Максимальная длина гряды камней.
 const MAX_RIDGE_LENGTH: int = 12
+
+## Максимальная доля коротких гряд (длина 1–2) от общего числа.
+const SHORT_RIDGE_MAX_RATIO: float = 0.15
 
 ## Количество попыток размещения одной гряды.
 const MAX_PLACEMENT_ATTEMPTS: int = 30
@@ -66,11 +69,15 @@ static func generate(arena_size: Vector2, ridge_count: int) -> Array[Ridge]:
 		occupied[Vector2i(grid_w - 2, z)] = true
 
 	var ridges: Array[Ridge] = []
+	var short_count: int = 0
+	var short_limit: int = floori(ridge_count * SHORT_RIDGE_MAX_RATIO)
 
 	for _i: int in range(ridge_count):
-		var ridge: Ridge = _try_place_ridge(grid_w, grid_h, occupied)
+		var ridge: Ridge = _try_place_ridge(grid_w, grid_h, occupied, short_count >= short_limit)
 		if ridge != null:
 			ridges.append(ridge)
+			if ridge.length <= 2:
+				short_count += 1
 			# Помечаем ячейки гряды + буферную зону
 			_mark_occupied(ridge, occupied)
 
@@ -89,10 +96,12 @@ static func grid_to_world(grid_x: int, grid_z: int, arena_size: Vector2) -> Vect
 # --- Приватные методы ---
 
 ## Пробует разместить одну гряду. Возвращает Ridge или null.
-static func _try_place_ridge(grid_w: int, grid_h: int, occupied: Dictionary) -> Ridge:
+## no_short — если true, длина минимум 3 (лимит коротких исчерпан).
+static func _try_place_ridge(grid_w: int, grid_h: int, occupied: Dictionary, no_short: bool = false) -> Ridge:
+	var min_len: int = 3 if no_short else MIN_RIDGE_LENGTH
 	for _attempt: int in range(MAX_PLACEMENT_ATTEMPTS):
 		var ridge := Ridge.new()
-		ridge.length = randi_range(MIN_RIDGE_LENGTH, MAX_RIDGE_LENGTH)
+		ridge.length = randi_range(min_len, MAX_RIDGE_LENGTH)
 		ridge.horizontal = randf() > 0.5
 
 		if ridge.horizontal:
