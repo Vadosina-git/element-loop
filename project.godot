@@ -14,19 +14,29 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Element Loop"
+config/name="Box Master"
 run/main_scene="res://src/main/game_controller.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.05, 0.12, 0.05, 1)
+boot_splash/stretch_mode=0
+boot_splash/image="res://assets/textures/logo_splash.png"
 
 [autoload]
 
 GameManager="*res://src/systems/game_manager.gd"
 AudioManager="*res://src/systems/audio_manager.gd"
+ConfigManager="*res://src/systems/config_manager.gd"
+Translations="*res://src/systems/translations.gd"
+SaveManager="*res://src/systems/save_manager.gd"
+LivesManager="*res://src/systems/lives_manager.gd"
+IapManager="*res://src/systems/iap_manager.gd"
 
 [rendering]
 
 renderer/rendering_method="forward_plus"
 renderer/rendering_method.web="gl_compatibility"
+renderer/rendering_method.mobile="forward_plus"
 
 [display]
 
