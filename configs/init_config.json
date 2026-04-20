@@ -1,0 +1,12 @@
+{
+  "splash_duration_sec": 4.0,
+  "lives_initial": 5,
+  "lives_max": 5,
+  "life_regen_seconds": 600,
+  "iap_packs": [
+    {"id": "boxmaster_lives_10",  "lives": 10,  "unlimited": false},
+    {"id": "boxmaster_lives_25",  "lives": 25,  "unlimited": false},
+    {"id": "boxmaster_lives_100", "lives": 100, "unlimited": false},
+    {"id": "boxmaster_lives_unlimited", "lives": 0, "unlimited": true}
+  ]
+}
