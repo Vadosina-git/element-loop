@@ -45,7 +45,15 @@ var _fly_from: Vector2 = Vector2.ZERO
 var _fly_to: Vector2 = Vector2.ZERO
 var _fly_element: int = -1
 const FLY_DURATION: float = 0.5
+const LivesPanelScript = preload("res://src/ui/hud/lives_panel.gd")
+const ShopOverlayScript = preload("res://src/ui/hud/shop_overlay.gd")
+const SettingsPopupScript = preload("res://src/ui/hud/settings_popup.gd")
 var _last_hp: int = 2
+var _lives_panel: PanelContainer = null
+var _shop_overlay: Control = null
+var _settings_popup: Control = null
+var _settings_button: Button = null
+var _lives_exhausted_overlay: Control = null
 
 # --- @onready переменные ---
 
@@ -80,6 +88,11 @@ func _ready() -> void:
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_setup_element_picker()
 	_setup_lighting_panel()
+	_setup_lives_panel()
+	_setup_shop_overlay()
+	_setup_settings_popup()
+	_setup_settings_button()
+	LivesManager.lives_exhausted.connect(_on_lives_exhausted)
 	_prev_char_btn.pressed.connect(func() -> void: prev_character_pressed.emit())
 	_next_char_btn.pressed.connect(func() -> void: next_character_pressed.emit())
 	update_hp(2)
@@ -253,6 +266,148 @@ func setup_lighting(main_l: DirectionalLight3D, fill_l: DirectionalLight3D, env:
 ## Переключает панель освещения.
 func toggle_lighting_panel() -> void:
 	_lighting_panel.toggle()
+
+
+## Открывает магазин (IAP жизни). Вызывается из LivesPanel "+" или когда жизни кончились.
+func show_shop() -> void:
+	if _lives_exhausted_overlay != null:
+		_lives_exhausted_overlay.visible = false
+	_shop_overlay.call("open")
+
+
+## Создаёт панель жизней в верхнем-левом углу, ниже HP.
+func _setup_lives_panel() -> void:
+	_lives_panel = LivesPanelScript.new() as PanelContainer
+	_lives_panel.anchor_left = 0.0
+	_lives_panel.anchor_top = 0.0
+	_lives_panel.anchor_right = 0.0
+	_lives_panel.anchor_bottom = 0.0
+	_lives_panel.offset_left = 20.0
+	_lives_panel.offset_top = 210.0
+	_lives_panel.offset_right = 360.0
+	_lives_panel.offset_bottom = 300.0
+	(_lives_panel as Object).connect("shop_requested", show_shop)
+	add_child(_lives_panel)
+
+
+## Создаёт оверлей магазина (скрыт по умолчанию).
+func _setup_shop_overlay() -> void:
+	_shop_overlay = ShopOverlayScript.new() as Control
+	add_child(_shop_overlay)
+
+
+## Создаёт попап настроек (скрыт по умолчанию).
+func _setup_settings_popup() -> void:
+	_settings_popup = SettingsPopupScript.new() as Control
+	add_child(_settings_popup)
+
+
+## Создаёт кнопку-шестерёнку для открытия настроек.
+func _setup_settings_button() -> void:
+	_settings_button = Button.new()
+	_settings_button.text = "⚙"
+	_settings_button.add_theme_font_size_override("font_size", 32)
+	_settings_button.custom_minimum_size = Vector2(60, 60)
+	_settings_button.focus_mode = Control.FOCUS_NONE
+	_settings_button.anchor_left = 1.0
+	_settings_button.anchor_top = 0.0
+	_settings_button.anchor_right = 1.0
+	_settings_button.anchor_bottom = 0.0
+	_settings_button.offset_left = -85.0
+	_settings_button.offset_top = 15.0
+	_settings_button.offset_right = -20.0
+	_settings_button.offset_bottom = 80.0
+	_settings_button.pressed.connect(func() -> void: _settings_popup.call("open"))
+	add_child(_settings_button)
+
+
+## Показывает полноэкранный оверлей "жизни закончились" с CTA в магазин.
+func _on_lives_exhausted() -> void:
+	if _lives_exhausted_overlay != null and is_instance_valid(_lives_exhausted_overlay):
+		_lives_exhausted_overlay.visible = true
+		return
+	_lives_exhausted_overlay = _build_exhausted_overlay()
+	add_child(_lives_exhausted_overlay)
+
+
+func _build_exhausted_overlay() -> Control:
+	var root := Control.new()
+	root.process_mode = Node.PROCESS_MODE_ALWAYS
+	root.anchor_right = 1.0
+	root.anchor_bottom = 1.0
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.z_index = 100
+
+	var bg := ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.75)
+	bg.anchor_right = 1.0
+	bg.anchor_bottom = 1.0
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(bg)
+
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("1A0F0F")
+	style.set_border_width_all(3)
+	style.border_color = Color("E07050")
+	style.set_corner_radius_all(16)
+	style.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -320.0
+	panel.offset_top = -180.0
+	panel.offset_right = 320.0
+	panel.offset_bottom = 180.0
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	root.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = Translations.tr_key("lives.exhausted_title")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color("E07050"))
+	col.add_child(title)
+
+	var body := Label.new()
+	body.text = Translations.tr_key("lives.exhausted_body")
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 20)
+	body.add_theme_color_override("font_color", Color.WHITE)
+	col.add_child(body)
+
+	var get_btn := Button.new()
+	get_btn.text = Translations.tr_key("lives.get_more")
+	get_btn.custom_minimum_size = Vector2(240, 60)
+	get_btn.add_theme_font_size_override("font_size", 26)
+	get_btn.add_theme_color_override("font_color", Color.WHITE)
+	get_btn.focus_mode = Control.FOCUS_NONE
+	var btn_style := StyleBoxFlat.new()
+	btn_style.bg_color = Color("1A6A2A")
+	btn_style.set_border_width_all(2)
+	btn_style.border_color = Color(1, 1, 1, 0.3)
+	btn_style.set_corner_radius_all(10)
+	get_btn.add_theme_stylebox_override("normal", btn_style)
+	get_btn.add_theme_stylebox_override("hover", btn_style)
+	get_btn.add_theme_stylebox_override("pressed", btn_style)
+	get_btn.pressed.connect(func() -> void:
+		root.visible = false
+		_shop_overlay.call("open")
+	)
+	var center_row := HBoxContainer.new()
+	center_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_row.add_child(get_btn)
+	col.add_child(center_row)
+
+	return root
 
 
 ## Обновляет имя текущего персонажа.

@@ -37,6 +37,9 @@ const SPAWN_MARGIN: float = 2.0
 # --- Встроенные колбеки ---
 
 func _ready() -> void:
+	# Splash screen на старте — показывается только при первом запуске сцены
+	_show_splash_if_first_launch()
+
 	# Получаем ссылки на узлы сцены
 	_arena = $ArenaView as ArenaView
 	_player = $ArenaView/PlayerCharacter as PlayerCharacter
@@ -388,9 +391,52 @@ func _on_player_died() -> void:
 	set_process(false)
 
 
-## Перезапуск уровня.
+## Перезапуск уровня. Тратит одну жизнь (или открывает магазин).
 func _on_restart_pressed() -> void:
+	if not LivesManager.consume():
+		_hud.show_shop()
+		return
 	get_tree().reload_current_scene()
+
+
+## Показывает splash screen при первом запуске сцены (не на рестарт).
+func _show_splash_if_first_launch() -> void:
+	if GameManager.has_meta("splash_shown"):
+		return
+	GameManager.set_meta("splash_shown", true)
+	var duration: float = ConfigManager.get_splash_duration()
+	if duration <= 0.0:
+		return
+
+	var splash := CanvasLayer.new()
+	splash.layer = 4096
+	add_child(splash)
+
+	var bg := ColorRect.new()
+	bg.color = Color(0.05, 0.12, 0.05, 1.0)
+	bg.anchor_right = 1.0
+	bg.anchor_bottom = 1.0
+	splash.add_child(bg)
+
+	var logo := TextureRect.new()
+	logo.texture = load("res://assets/textures/logo_splash.png")
+	logo.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.anchor_left = 0.5
+	logo.anchor_top = 0.5
+	logo.anchor_right = 0.5
+	logo.anchor_bottom = 0.5
+	logo.offset_left = -256.0
+	logo.offset_top = -256.0
+	logo.offset_right = 256.0
+	logo.offset_bottom = 256.0
+	splash.add_child(logo)
+
+	await get_tree().create_timer(duration).timeout
+	var fade: Tween = splash.create_tween()
+	fade.tween_property(bg, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_IN)
+	fade.parallel().tween_property(logo, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_IN)
+	fade.tween_callback(splash.queue_free)
 
 
 func _input(event: InputEvent) -> void:
