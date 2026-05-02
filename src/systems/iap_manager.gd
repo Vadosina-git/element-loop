@@ -7,7 +7,7 @@ extends Node
 ## фиктивные цены. Это позволяет разрабатывать и тестировать магазин в Godot
 ## editor / web, где нативный IAP недоступен.
 ##
-## SKU для Box Master:
+## SKU для Element Loop (имена SKU оставлены `boxmaster_*` для совместимости):
 ##   boxmaster_lives_10         — +10 жизней
 ##   boxmaster_lives_25         — +25 жизней
 ##   boxmaster_lives_100        — +100 жизней

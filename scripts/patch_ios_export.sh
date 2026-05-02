@@ -8,9 +8,9 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-INFO_PLIST="builds/ios/BoxMaster/BoxMaster-Info.plist"
+INFO_PLIST="builds/ios/ElementLoop/ElementLoop-Info.plist"
 PRIVACY="builds/ios/PrivacyInfo.xcprivacy"
-PBXPROJ="builds/ios/BoxMaster.xcodeproj/project.pbxproj"
+PBXPROJ="builds/ios/ElementLoop.xcodeproj/project.pbxproj"
 
 [ -f "$INFO_PLIST" ] || { echo "ошибка: $INFO_PLIST не найден. Сначала запустите iOS-экспорт." >&2; exit 1; }
 [ -f "$PBXPROJ" ]  || { echo "ошибка: $PBXPROJ не найден." >&2; exit 1; }
@@ -77,4 +77,4 @@ if grep -q 'CODE_SIGN_IDENTITY = "Apple Distribution"' "$PBXPROJ"; then
     sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Distribution"/CODE_SIGN_IDENTITY = "Apple Development"/g' "$PBXPROJ"
     echo "✓ Signing нормализован для Automatic"
 fi
-echo "Готово. Откройте builds/ios/BoxMaster.xcodeproj в Xcode."
+echo "Готово. Откройте builds/ios/ElementLoop.xcodeproj в Xcode."

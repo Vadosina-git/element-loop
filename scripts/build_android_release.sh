@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Собирает подписанный Android release APK для Box Master.
+# Собирает подписанный Android release APK для Element Loop.
 # Креды берутся из .keystore.env (gitignored). Скрипт временно подставляет
 # их в export_presets.cfg на время сборки и восстанавливает файл после.
 # Использование: ./scripts/build_android_release.sh [путь_к_APK]
@@ -20,7 +20,7 @@ source .keystore.env
 : "${ANDROID_KEYSTORE_USER:?ANDROID_KEYSTORE_USER обязателен}"
 : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD обязателен}"
 
-OUTPUT="${1:-builds/android/boxmaster_release.apk}"
+OUTPUT="${1:-builds/android/element_loop_release.apk}"
 mkdir -p "$(dirname "$OUTPUT")"
 
 cp export_presets.cfg export_presets.cfg.bak

@@ -11,7 +11,7 @@ APP_STORE_API_KEY_PATH="$(eval echo "$APP_STORE_API_KEY_PATH")"
 : "${APP_STORE_API_KEY_ID:?}"
 [ -f "$APP_STORE_API_KEY_PATH" ] || { echo "ошибка: $APP_STORE_API_KEY_PATH отсутствует"; exit 1; }
 
-IPA="${1:-builds/ios/export/BoxMaster.ipa}"
+IPA="${1:-builds/ios/export/ElementLoop.ipa}"
 [ -f "$IPA" ] || { echo "ошибка: $IPA отсутствует. Сначала сделайте Archive в Xcode."; exit 1; }
 
 xcrun altool --upload-app --file "$IPA" --type ios \
