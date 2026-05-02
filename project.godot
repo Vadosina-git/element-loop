@@ -17,10 +17,10 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="Box Master"
 run/main_scene="res://src/main/game_controller.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://icon.svg"
 boot_splash/bg_color=Color(0.05, 0.12, 0.05, 1)
 boot_splash/stretch_mode=0
 boot_splash/image="res://assets/textures/logo_splash.png"
+config/icon="res://icon.svg"
 
 [autoload]
 
@@ -32,20 +32,17 @@ SaveManager="*res://src/systems/save_manager.gd"
 LivesManager="*res://src/systems/lives_manager.gd"
 IapManager="*res://src/systems/iap_manager.gd"
 
-[rendering]
-
-renderer/rendering_method="forward_plus"
-renderer/rendering_method.web="gl_compatibility"
-renderer/rendering_method.mobile="forward_plus"
-
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/handheld/orientation=0
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
 [input_devices]
 
 pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method.mobile="forward_plus"
