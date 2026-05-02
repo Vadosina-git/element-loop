@@ -1,6 +1,64 @@
 # ELEMENT LOOP — PROJECT REFERENCE
 
+**Размер CLAUDE.md: ~13 300 токенов** _(обновлять при каждой крупной правке этого файла; цель — держать ниже 18k. Если разрастается — выносить разделы в `docs/` и оставлять только ссылки. Считать примерно: `wc -c CLAUDE.md` / 3 = токены.)_
+
 **Язык общения: русский.** Все ответы, комментарии в коде, докстринги, документация и commit-сообщения — на русском языке. Исключение: имена переменных, функций, классов, файлов — на английском (требование Godot/GDScript).
+
+## Документация по разделам
+
+Подгружай эти файлы когда работаешь с соответствующими темами. **Не отвечай по памяти** — точные параметры, тайминги и edge-кейсы хранятся в docs.
+
+### Враги и снаряды
+- **`docs/ENEMY_AI.md`** — ОБЯЗАТЕЛЬНО при работе с FSM врагов
+  (WANDER/CHASE/SEARCH/TELEGRAPH/ATTACK/RECOVER), LoS, хлебными
+  крошками, detection Area3D, коаст-переходом, боковой дугой.
+  Файлы: `src/enemies/enemy_base.gd`, `src/enemies/enemy_ai.gd`.
+
+- **`docs/ENEMY_CLASSES.md`** — ОБЯЗАТЕЛЬНО при работе с классами
+  врагов (Melee/Ranged/Bomber), виртуалами, кайтом, спавном микса.
+  Класс ортогонален стихии. Файлы: `src/enemies/archetypes/*.gd`.
+
+- **`docs/PROJECTILES.md`** — подгрузи при работе со снарядами
+  (Arrow, Bomb): фазы, friendly fire, баланс. `src/enemies/projectiles/*.gd`.
+
+- **`docs/DEBUG_VISUAL.md`** — отладочная визуализация (клавиша K),
+  цветовая легенда, `_draw_class_debug`, ImmediateMesh helpers.
+
+### Ядро игры
+- **`docs/COMBAT_CORE.md`** — ОБЯЗАТЕЛЬНО при работе со стихиями,
+  контрами, метками, яростью, FIFO-зонами. Балансовые константы
+  (MARK_DURATION, RAGE_*, MAX_ZONES). `src/combat/*.gd`.
+
+- **`docs/PLAYER.md`** — ОБЯЗАТЕЛЬНО при правке игрока: движение,
+  рывок (DASH_*), KayKit персонажи, кольцо стихии, индикатор,
+  PlayerInput (приоритет ввода). `src/player/*.gd`.
+
+- **`docs/MAP_OBJECTS.md`** — подгрузи при работе с книгой
+  (рулетка стихий, удержание, респаун через NavMesh) и зонами
+  (NavObstacle3D у Earth). `src/arena/map_objects/*.gd`,
+  `src/ui/hud/element_picker.gd`.
+
+- **`docs/ARENA.md`** — подгрузи при работе с генерацией арены:
+  MazeGenerator (RIDGE_COUNT, MIN_GAP, SHORT_RIDGE_MAX_RATIO),
+  бейкинг навмеша (BoxMesh-источник), безопасный спавн через
+  `NavigationServer3D.map_get_random_point`. `src/arena/*.gd`.
+
+### Системы и визуал
+- **`docs/SYSTEMS.md`** — подгрузи при работе с автозагрузками:
+  SaveManager (XOR-обфускация JSON), LivesManager (10-мин реген,
+  catch-up), IapManager (RevenueCat + STUB), ConfigManager,
+  Translations. `src/systems/*.gd`.
+
+- **`docs/VISUAL_STACK.md`** — подгрузи при работе с пост-обработкой
+  (CanvasLayer 0!), outline (inverted hull через next_pass),
+  ArenaCamera (4 пресета), LightingPanel (5 пресетов, клавиша L).
+
+### Болевой журнал
+- **`docs/PAIN_LOG.md`** — ОБЯЗАТЕЛЬНО прочитай перед любой
+  сложной задачей. Симптом → причина → решение по баг-кейсам,
+  на которые мы уже наступили (NavMesh, рендер, ввод, снаряды).
+
+---
 
 ## OVERVIEW
 
@@ -587,110 +645,30 @@ godot --headless --path . --export-release "iOS" builds/ios/
 
 ---
 
-## РЕАЛИЗОВАННЫЕ СИСТЕМЫ (ТЕКУЩЕЕ СОСТОЯНИЕ)
+## РЕАЛИЗОВАННЫЕ СИСТЕМЫ
 
-### Навигация врагов (NavMesh + кеширование)
+Подробности — в `docs/`. Ниже только карта: что где живёт.
 
-**Архитектура:**
-- `NavigationRegion3D` на арене — бейкается один раз при старте
-- Содержит невидимый BoxMesh (пол) + копии коллайдеров камней для вырезов
-- `cell_size = 0.5`, `agent_radius = 0.4`
-- После бейка вспомогательные мешки скрываются
+| Раздел | Файлы | Документ |
+|---|---|---|
+| Ядро боя | `src/combat/*.gd` | [`docs/COMBAT_CORE.md`](docs/COMBAT_CORE.md) |
+| Игрок + ввод | `src/player/*.gd` | [`docs/PLAYER.md`](docs/PLAYER.md) |
+| Враги (FSM, LoS, крошки) | `src/enemies/enemy_base.gd`, `enemy_ai.gd` | [`docs/ENEMY_AI.md`](docs/ENEMY_AI.md) |
+| Классы врагов (M/R/B) | `src/enemies/archetypes/*.gd` | [`docs/ENEMY_CLASSES.md`](docs/ENEMY_CLASSES.md) |
+| Снаряды | `src/enemies/projectiles/*.gd` | [`docs/PROJECTILES.md`](docs/PROJECTILES.md) |
+| Debug-визуализация (K) | `_update_debug_visual` в EnemyBase | [`docs/DEBUG_VISUAL.md`](docs/DEBUG_VISUAL.md) |
+| Книга, рулетка, зоны | `src/arena/map_objects/*.gd`, `element_picker.gd` | [`docs/MAP_OBJECTS.md`](docs/MAP_OBJECTS.md) |
+| Арена, маза, навмеш | `src/arena/arena_view.gd`, `maze_generator.gd` | [`docs/ARENA.md`](docs/ARENA.md) |
+| Автозагрузки (Save/Lives/IAP) | `src/systems/*.gd` | [`docs/SYSTEMS.md`](docs/SYSTEMS.md) |
+| Пост-обработка, outline, камера | `src/arena/post_processing.gd`, `outline_manager.gd`, `arena_camera.gd` | [`docs/VISUAL_STACK.md`](docs/VISUAL_STACK.md) |
+| Решённые проблемы (PAIN_LOG) | — | [`docs/PAIN_LOG.md`](docs/PAIN_LOG.md) |
 
-**NavigationAgent3D на каждом враге:**
-- `path_desired_distance = 1.0`, `target_desired_distance = 1.0`
-- `avoidance_enabled = true` — враги расходятся в узких проходах
-- `radius = 0.3`
+### Что не вынесено в docs
 
-**Алгоритм движения (enemy_base.gd `_physics_process`):**
+**GameController** (`src/main/game_controller.gd`) — оркестратор. Создаёт 5 врагов микса (см. `ENEMY_CLASSES.md` §5), 3 книги, связывает все системы. Клавиши: `R` (рестарт), `L` (lighting panel), `K` (debug враги).
 
-```
-Каждые 0.3 сек (_nav_update_timer):
-  1. agent.target_position = player.global_position
-  2. Если путь не завершён:
-       next_pos = agent.get_next_path_position()
-       next_pos.y = enemy.y  (фикс разницы высот навмеша и врага)
-       direction = (next_pos - enemy_pos).normalized()
-  3. Если навигация не дала результат (length² < 0.01):
-       direction = (player_pos - enemy_pos).normalized()  (fallback + push_warning)
-  4. Кешируем direction → _cached_move_dir
+**HUD** (`src/ui/hud/hud.gd`) — HP-сердечки, иконка стихии, кнопки зоны/рывка, переключатель персонажей `< >`. Stretch canvas_items для масштаба под mobile.
 
-Каждый кадр:
-  1. current_dir = velocity.normalized()
-  2. lerp_factor = 15.0 * (speed / base_speed)  — быстрее враг → быстрее поворот
-  3. smooth_dir = current_dir.lerp(_cached_move_dir, lerp_factor * delta).normalized()
-  4. velocity = smooth_dir * speed
-  5. move_and_slide()
-```
+**ElementIcons** (`src/ui/element_icons.gd`) — PNG 160×160 из Apple Color Emoji в `assets/icons/`. API: `get_texture(element)`, `get_heart_texture()`, `get_book_texture()`, `get_alert_texture()`, `get_element_name(element)` → «Огонь»/«Вода»/… **Зачем PNG, а не emoji-фонт:** браузер на Godot Web рендерит fallback-фонт без emoji (см. PAIN_LOG).
 
-**Ключевые решения:**
-- Кеширование направления раз в 0.3 сек — без вибрации
-- Lerp пропорционально скорости — ярость (+25%) = быстрее поворот
-- Fallback на прямое движение — если навмеш не покрывает зону
-- `move_and_slide()` — дополнительное скольжение по стенам
-
-**Заложено на будущее:**
-- Earth-стена (способность игрока): `NavigationObstacle3D` добавляется автоматически при создании Earth-зоны (`zone_object.gd _setup_nav_obstacle`)
-- Босс: одного размера с обычными врагами (единый agent_radius)
-- Респавн объектов: через `NavigationServer3D.map_get_random_point()` — гарантированно на навмеше
-
-### Выбор стихии (рулетка)
-
-**При подборе книги:**
-1. Книга эмитит `book_activated(book)` → GameController показывает рулетку
-2. Рулетка: 2 случайных варианта из контр-стихий живых врагов + кнопка отказа
-3. Клавиши: Q (левая), E (правая), Esc (отказ)
-4. Игра ставится на паузу (`get_tree().paused = true`)
-5. Рулетка работает на паузе (`process_mode = PROCESS_MODE_ALWAYS`)
-6. После выбора: книга исчезает (`consume()`), респаунится через 2 сек в новой точке
-
-**Книги:**
-- 3 штуки на поле, не исчезают автоматически
-- Стихии выбираются из контров живых врагов (`_get_counter_elements`)
-
-### Зоны (ловушки)
-
-- Лимит: 2 активных зоны (MAX_ZONES = 2), третья убивает первую (FIFO)
-- Не исчезают по таймеру
-- Радиус: 0.8
-- Earth-зоны добавляют NavigationObstacle3D для обхода врагами
-
-### Иконки (кроссплатформенные)
-
-**`ElementIcons` (src/ui/element_icons.gd):**
-- PNG-текстуры 160x160 из Apple Color Emoji (assets/icons/)
-- Используются через `Sprite3D` (3D, над врагами) и `TextureRect` (UI)
-- `get_texture(element)`, `get_heart_texture()`, `get_book_texture()`, `get_alert_texture()`
-- Названия: `get_element_name(element)` → "Огонь", "Вода" и т.д.
-
-### Персонажи
-
-**8 персонажей из KayKit (assets/kaykit_skeletons/):**
-- GLB с 95 анимациями каждый
-- Переключение через `< >` кнопки (HUD слева внизу)
-- Анимации: `Walking_A`, `Unarmed_Idle`, `Jump_Full_Short`, `Jump_Land`, `Cheer`
-- Модель повёрнута на PI (rotation.y) для совместимости с `look_at`
-- `_hide_equipment()` — скрывает оружие в руках
-
-### Камера
-
-**Пресеты:**
-- Стандарт (дефолт): angle=48°, height=16, fov=45
-- Ближняя: angle=55°, height=10, fov=45
-- Top-Down: angle=80°, height=16, fov=45
-- Изометрия: angle=35°, height=12, fov=40
-
-**Слежение:** `set_as_top_level(true)`, lerp к позиции игрока (`FOLLOW_SPEED = 5.0`)
-
-### Движение игрока
-
-- Инерция: `ACCELERATION = 15.0`, `DECELERATION = 10.0` (lerp velocity)
-- Плавный поворот: `ROTATION_SPEED = 12.0` (lerp rotation.y)
-- Рывок (Shift): velocity-based, кулдаун 5 сек
-
-### Арена
-
-- Размер: 36x24 (шире чем выше)
-- Процедурный лабиринт: `MazeGenerator`, 120 гряд, MIN_GAP=4, CELL_SIZE=1.0
-- Тайлы и стены: KayKit Prototype, scale 0.25
-- Навмеш бейкается с учётом камней
+**CI/CD:** GitHub Actions (`.github/workflows/deploy-web.yml`) — автосборка Web + деплой на Pages при пуше в master. Контейнер `barichello/godot-ci:4.6.1`, coi-serviceworker для SharedArrayBuffer. Деплой: `https://vadosina-git.github.io/element-loop/`.

@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://src/enemies/enemy_base.tscn" id="1_base"]
+[ext_resource type="Script" path="res://src/enemies/archetypes/melee_enemy.gd" id="2_melee"]
+
+[node name="MeleeEnemy" instance=ExtResource("1_base")]
+script = ExtResource("2_melee")

@@ -9,8 +9,20 @@ extends Node
 # --- Константы ---
 
 const ZONE_SCENE: String = "res://src/arena/map_objects/zone_object.tscn"
-const ENEMY_SCENE: String = "res://src/enemies/enemy_base.tscn"
+const MELEE_ENEMY_SCENE: String = "res://src/enemies/archetypes/melee_enemy.tscn"
+const RANGED_ENEMY_SCENE: String = "res://src/enemies/archetypes/ranged_enemy.tscn"
+const BOMBER_ENEMY_SCENE: String = "res://src/enemies/archetypes/bomber_enemy.tscn"
 const BOOK_SCENE: String = "res://src/arena/map_objects/book_object.tscn"
+
+## Состав комнаты — индекс i соответствует i-му врагу.
+## На текущем этапе фиксируем для тестирования всех трёх классов.
+const ROOM_COMPOSITION: Array[String] = [
+	MELEE_ENEMY_SCENE,
+	RANGED_ENEMY_SCENE,
+	MELEE_ENEMY_SCENE,
+	BOMBER_ENEMY_SCENE,
+	RANGED_ENEMY_SCENE,
+]
 
 # --- Приватные переменные ---
 
@@ -146,7 +158,6 @@ func _process(delta: float) -> void:
 
 ## Спавнит всех врагов в случайных точках.
 func _spawn_enemies() -> void:
-	var scene: PackedScene = load(ENEMY_SCENE) as PackedScene
 	var elements: Array[ElementTable.Element] = [
 		ElementTable.Element.FIRE,
 		ElementTable.Element.WATER,
@@ -157,6 +168,9 @@ func _spawn_enemies() -> void:
 
 	var enemy_positions: Array[Vector3] = _arena.get_distributed_spawn_positions(ENEMY_COUNT, _player.global_position, 5.0)
 	for i: int in range(ENEMY_COUNT):
+		# Класс врага берётся из ROOM_COMPOSITION (по индексу).
+		var class_path: String = ROOM_COMPOSITION[i % ROOM_COMPOSITION.size()]
+		var scene: PackedScene = load(class_path) as PackedScene
 		var enemy: EnemyBase = scene.instantiate() as EnemyBase
 		enemy.element = elements[i % elements.size()]
 		enemy.level = 1

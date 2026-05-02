@@ -38,6 +38,10 @@ const DEATH_SCALE_MAX: float = 3.0
 @export var detection_range: float = 5.0
 const PULSE_RADIUS: float = 2.0
 
+## Дефолтные значения окна атаки. Подклассы переопределяют через виртуалы.
+const DEFAULT_TELEGRAPH_DURATION: float = 0.3
+const DEFAULT_ATTACK_DURATION: float = 0.4
+
 # --- Публичные переменные ---
 
 var hp: int = 1
@@ -45,6 +49,13 @@ var max_hp: int = 1
 var is_marked: bool = false
 var is_enraged: bool = false
 var enemy_id: int = -1
+
+## Точка, к которой враг идёт в состоянии SEARCH (последняя крошка).
+## Устанавливается из EnemyAI.
+var investigation_target: Vector3 = Vector3.ZERO
+
+## Игрок внутри Area3D-зоны детекции. Управляется сигналами body_entered/exited.
+var player_in_range: bool = false
 
 # --- Приватные переменные ---
 
@@ -67,6 +78,28 @@ var _agony_jump_timer: float = 0.0
 var _is_dying: bool = false
 var _death_timer: float = 0.0
 var _element_sprite: Sprite3D = null
+var _detection_area: Area3D = null
+var _detection_shape: SphereShape3D = null
+
+## Скорость движения в фазе ATTACK. Дефолт — стоит на месте.
+## Melee переопределяет prepare_attack / execute_attack для прыжка.
+var _attack_velocity: Vector3 = Vector3.ZERO
+
+## Базовый scale меша — для возврата после squash/stretch анимаций.
+var _mesh_base_scale: Vector3 = Vector3.ONE
+
+# --- Параметры боковой дуги преследования (уникальны на врага) ---
+## Частота колебаний бокового смещения (рад/сек).
+var _arc_freq: float = 0.5
+## Амплитуда бокового смещения (метры).
+var _arc_amplitude: float = 0.5
+## Фазовый сдвиг — каждый враг ловит свою фазу синусоиды.
+var _arc_phase: float = 0.0
+
+# --- Отладочная визуализация LoS и крошек (временно) ---
+static var debug_visible: bool = true
+var _debug_mesh: MeshInstance3D = null
+var _debug_imesh: ImmediateMesh = null
 
 # --- @onready переменные ---
 
@@ -79,9 +112,21 @@ var _element_sprite: Sprite3D = null
 
 func _ready() -> void:
 	hp = max_hp
+	# Уникальные параметры боковой дуги — чтобы враги не шли по одной траектории.
+	_arc_phase = randf() * TAU
+	_arc_freq = randf_range(0.4, 0.8)
+	_arc_amplitude = randf_range(0.35, 0.7)
 	_setup_visual()
 	_setup_element_label()
 	_setup_detection_circle()
+	_setup_detection_area()
+	_setup_debug_visual()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+		if (event as InputEventKey).keycode == KEY_K:
+			debug_visible = not debug_visible
 
 
 func _physics_process(delta: float) -> void:
@@ -92,32 +137,43 @@ func _physics_process(delta: float) -> void:
 	var current: EnemyAI.State = _ai.current_state
 	var is_moving: bool = false
 
-	var is_aggressive: bool = current in [EnemyAI.State.CHASE, EnemyAI.State.TELEGRAPH, EnemyAI.State.RECOVER]
+	# Навигация работает только в состояниях, где враг идёт за целью.
+	# TELEGRAPH (присед) и ATTACK (прыжок) — отдельные ветки ниже.
+	var is_aggressive: bool = current in [EnemyAI.State.CHASE, EnemyAI.State.SEARCH, EnemyAI.State.RECOVER]
 
 	if is_aggressive:
 		if _target != null:
+			# В SEARCH цель — последняя крошка, иначе — позиция от виртуала класса.
+			var goal_pos: Vector3 = investigation_target if current == EnemyAI.State.SEARCH else get_chase_position()
+
 			# Пересчитываем направление раз в 0.3 сек
 			_nav_update_timer -= delta
 			if _nav_update_timer <= 0.0:
 				_nav_update_timer = 0.3
-				var new_dir: Vector3 = Vector3.ZERO
-
-				if _nav_agent != null:
-					_nav_agent.target_position = _target.global_position
-					if not _nav_agent.is_navigation_finished():
-						var next_pos: Vector3 = _nav_agent.get_next_path_position()
-						next_pos.y = global_position.y
-						new_dir = next_pos - global_position
-
-				if new_dir.length_squared() < 0.01:
-					new_dir = _target.global_position - global_position
-					push_warning("Enemy %d: NavMesh fallback — прямое движение к игроку" % enemy_id)
-
-				new_dir.y = 0.0
-				if new_dir.length() > 0.1:
-					_cached_move_dir = new_dir.normalized()
-				else:
+				var to_goal_xz: Vector3 = goal_pos - global_position
+				to_goal_xz.y = 0.0
+				# Цель совпадает с текущей позицией (например, ranged стоит в зоне) —
+				# не дёргаем NavAgent, просто стоим. Иначе фолбэк зашумлял бы лог.
+				if to_goal_xz.length() < 0.3:
 					_cached_move_dir = Vector3.ZERO
+				else:
+					var new_dir: Vector3 = Vector3.ZERO
+					if _nav_agent != null:
+						_nav_agent.target_position = goal_pos
+						if not _nav_agent.is_navigation_finished():
+							var next_pos: Vector3 = _nav_agent.get_next_path_position()
+							next_pos.y = global_position.y
+							new_dir = next_pos - global_position
+
+					if new_dir.length_squared() < 0.01:
+						# Нав-меш не дал пути — идём прямо. Фолбэк, без шума в логе.
+						new_dir = to_goal_xz
+
+					new_dir.y = 0.0
+					if new_dir.length() > 0.1:
+						_cached_move_dir = new_dir.normalized()
+					else:
+						_cached_move_dir = Vector3.ZERO
 
 			if _cached_move_dir.length() > 0.1:
 				# Плавный поворот — быстрее враг → быстрее поворачивает
@@ -141,10 +197,21 @@ func _physics_process(delta: float) -> void:
 			look_at(global_position + _wander_direction, Vector3.UP)
 			is_moving = true
 		else:
-			velocity = Vector3.ZERO
-	elif current == EnemyAI.State.ATTACK:
-		# Рывок на месте во время атаки
+			# Нет направления — гасим скорость по инерции, не сбрасываем мгновенно.
+			# Это даёт «коаст» при выходе из погони: враг едет по инерции, замедляется и встаёт.
+			velocity = velocity.lerp(Vector3.ZERO, delta * 4.0)
+			if velocity.length() > 0.1:
+				is_moving = true
+	elif current == EnemyAI.State.TELEGRAPH:
+		# Присед перед прыжком — стоим на месте.
 		velocity = Vector3.ZERO
+	elif current == EnemyAI.State.ATTACK:
+		# Фаза атаки — движение задаётся классом через _attack_velocity.
+		# Melee = leap velocity, ranged/bomber = ноль (стоят, спавнят снаряд в execute_attack).
+		velocity = _attack_velocity
+		if _attack_velocity.length() > 0.1:
+			var atk_dir: Vector3 = _attack_velocity.normalized()
+			look_at(global_position + atk_dir, Vector3.UP)
 
 	move_and_slide()
 
@@ -161,6 +228,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_detection_circle()
 	_animate(delta, is_moving)
+	_update_debug_visual()
 
 
 # --- Публичные методы ---
@@ -169,6 +237,36 @@ func _physics_process(delta: float) -> void:
 ## Установить цель для преследования.
 func set_target(target: Node3D) -> void:
 	_target = target
+	# Если игрок уже находится внутри зоны детекции на момент назначения —
+	# body_entered не сработает задним числом, поэтому проверяем вручную.
+	if target == null:
+		player_in_range = false
+		return
+	if _detection_area != null:
+		var overlaps: Array[Node3D] = _detection_area.get_overlapping_bodies()
+		player_in_range = target in overlaps
+
+
+## Проверяет, видит ли враг указанную цель (нет преград между ними).
+##
+## Луч пускается на высоте 0.8 от обоих участников, исключая их самих.
+## Любое попадание (стена/камень) — цель не видна.
+func has_line_of_sight_to(target: Node3D) -> bool:
+	if target == null:
+		return false
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var eye_offset: Vector3 = Vector3(0.0, 0.8, 0.0)
+	var from: Vector3 = global_position + eye_offset
+	var to: Vector3 = target.global_position + eye_offset
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, 1)
+	var excludes: Array[RID] = [self.get_rid()]
+	if target is CollisionObject3D:
+		excludes.append((target as CollisionObject3D).get_rid())
+	query.exclude = excludes
+	var hit: Dictionary = space.intersect_ray(query)
+	return hit.is_empty()
 
 
 ## Получить расстояние до цели (только по XZ, без учёта высоты).
@@ -239,6 +337,118 @@ func apply_rage() -> void:
 ## Снять ярость.
 func remove_rage() -> void:
 	is_enraged = false
+
+
+## --- Виртуальные хуки для классов врагов (melee/ranged/bomber) ---
+## Подклассы переопределяют, чтобы задать своё поведение атаки.
+
+## Длительность фазы подготовки атаки.
+func get_telegraph_duration() -> float:
+	return DEFAULT_TELEGRAPH_DURATION
+
+
+## Длительность фазы выполнения атаки.
+func get_attack_duration() -> float:
+	return DEFAULT_ATTACK_DURATION
+
+
+## Дистанция, на которой враг переходит из CHASE в TELEGRAPH.
+func get_attack_engagement_range() -> float:
+	return 1.5
+
+
+## Минимальная дистанция, ниже которой враг НЕ начинает атаку.
+## Для ranged — комфортная дистанция, чтобы не стрелять в упор.
+func get_attack_min_range() -> float:
+	return 0.0
+
+
+## Куда враг идёт в фазе CHASE. Дефолт — к игроку с лёгким боковым отклонением,
+## чтобы несколько врагов не сходились в одну точку.
+## Ranged/bomber переопределяют для kite-логики.
+func get_chase_position() -> Vector3:
+	if _target == null:
+		return global_position
+	return _apply_chase_arc(_target.global_position)
+
+
+## Прибавляет к точке-цели небольшое боковое смещение (перпендикуляр к направлению).
+## Затухает на близкой дистанции, чтобы враг точно подошёл к игроку.
+func _apply_chase_arc(target_pos: Vector3) -> Vector3:
+	var to_target: Vector3 = target_pos - global_position
+	to_target.y = 0.0
+	var dist: float = to_target.length()
+	if dist < 0.5:
+		return target_pos
+	var dir: Vector3 = to_target / dist
+	# Перпендикуляр в горизонтальной плоскости.
+	var perp: Vector3 = Vector3(-dir.z, 0.0, dir.x)
+	# Смещение колеблется во времени, фаза/частота уникальны на врага.
+	var t: float = float(Time.get_ticks_msec()) * 0.001
+	var offset: float = sin(t * _arc_freq + _arc_phase) * _arc_amplitude
+	# Затухание при подходе ближе 2.5м — чтобы не кружить вокруг игрока.
+	var fade: float = clampf((dist - 0.8) / 1.7, 0.0, 1.0)
+	return target_pos + perp * offset * fade
+
+
+## Старт фазы TELEGRAPH (CHASE → TELEGRAPH). Сделать снимок цели/направления.
+func prepare_attack() -> void:
+	pass
+
+
+## Старт фазы ATTACK (TELEGRAPH → ATTACK). Спавнить снаряды или задавать leap-скорость.
+func execute_attack() -> void:
+	pass
+
+
+## Конец фазы ATTACK (перед переходом в RECOVER).
+## Melee проверяет здесь дистанцию приземления и наносит урон.
+## Ranged/bomber оставляют пустым — урон обрабатывается в снаряде.
+func resolve_attack_landing() -> void:
+	pass
+
+
+## Класс-специфичная отладочная отрисовка (метка прыжка / линия выстрела / круг бомбы).
+## Подклассы переопределяют. Вызывается внутри открытого ImmediateMesh.surface_begin блока.
+func _draw_class_debug(_imesh: ImmediateMesh) -> void:
+	pass
+
+
+## Helper: рисует горизонтальный круг на земле как набор отрезков (ImmediateMesh PRIMITIVE_LINES).
+func _debug_draw_circle(imesh: ImmediateMesh, center: Vector3, radius: float, color: Color, segments: int = 20) -> void:
+	var prev: Vector3 = center + Vector3(radius, 0.0, 0.0)
+	for i: int in range(1, segments + 1):
+		var a: float = float(i) / float(segments) * TAU
+		var pt: Vector3 = center + Vector3(cos(a) * radius, 0.0, sin(a) * radius)
+		imesh.surface_set_color(color)
+		imesh.surface_add_vertex(prev)
+		imesh.surface_set_color(color)
+		imesh.surface_add_vertex(pt)
+		prev = pt
+
+
+## Helper: маркер-крестик на земле (без круга, для тонких меток).
+func _debug_draw_cross(imesh: ImmediateMesh, center: Vector3, size: float, color: Color) -> void:
+	imesh.surface_set_color(color)
+	imesh.surface_add_vertex(center + Vector3(-size, 0.0, 0.0))
+	imesh.surface_set_color(color)
+	imesh.surface_add_vertex(center + Vector3(size, 0.0, 0.0))
+	imesh.surface_set_color(color)
+	imesh.surface_add_vertex(center + Vector3(0.0, 0.0, -size))
+	imesh.surface_set_color(color)
+	imesh.surface_add_vertex(center + Vector3(0.0, 0.0, size))
+
+
+## Анимация в фазах TELEGRAPH/ATTACK. Вызывается из _animate каждый кадр.
+## Возвращает дополнительное смещение для значка стихии (label_bounce).
+## Дефолт — лёгкое подёргивание; melee переопределяет под squash+arc.
+func _animate_attack(_delta: float) -> float:
+	if _mesh == null:
+		return 0.0
+	# Нейтральная подготовка/выпад: лёгкое наклонение вперёд.
+	_mesh.rotation.x = -0.15
+	_mesh.position.y = 0.0
+	return 0.0
 
 
 # --- Приватные методы ---
@@ -459,20 +669,134 @@ func _animate(delta: float, is_moving: bool) -> void:
 		_mesh.rotation.x = sin(_anim_time) * 0.06
 		_mesh.rotation.z = sin(_anim_time * 0.6) * 0.03
 		label_bounce = absf(sin(_anim_time * 0.5)) * 0.03
-	elif _ai.current_state == EnemyAI.State.ATTACK:
-		# Рывок вперёд при атаке
-		_mesh.rotation.x = -0.3
-		_mesh.position.y = 0.0
+	elif _ai.current_state == EnemyAI.State.TELEGRAPH or _ai.current_state == EnemyAI.State.ATTACK:
+		# Анимация атаки — обрабатывается подклассами через _animate_attack().
+		# Возвращает дополнительный label_bounce, который сложится с базовым.
+		label_bounce = _animate_attack(delta)
 	else:
 		# Возврат в покой
 		_mesh.position.x = lerpf(_mesh.position.x, 0.0, delta * 10.0)
 		_mesh.position.y = lerpf(_mesh.position.y, 0.0, delta * 10.0)
 		_mesh.rotation.x = lerpf(_mesh.rotation.x, 0.0, delta * 10.0)
 		_mesh.rotation.z = lerpf(_mesh.rotation.z, 0.0, delta * 10.0)
+		# Возврат scale к базовому после приседа/прыжка.
+		_mesh.scale = _mesh.scale.lerp(_mesh_base_scale, delta * 12.0)
 
 	# Значок стихии — покачивается в такт
 	if _element_sprite != null:
 		_element_sprite.position = Vector3(label_shake_x, 1.2 + label_bounce, 0.0)
+
+
+## Создаёт Area3D-зону детекции игрока.
+##
+## Игрок на слое 1 — луч-маски ставим тоже 1. Стены/камни тоже на слое 1,
+## поэтому в хендлерах фильтруем по identity (`body == _target`).
+func _setup_detection_area() -> void:
+	_detection_area = Area3D.new()
+	_detection_area.collision_layer = 0
+	_detection_area.collision_mask = 1
+	_detection_area.monitoring = true
+	_detection_area.monitorable = false
+
+	_detection_shape = SphereShape3D.new()
+	_detection_shape.radius = detection_range
+	var col: CollisionShape3D = CollisionShape3D.new()
+	col.shape = _detection_shape
+	_detection_area.add_child(col)
+	add_child(_detection_area)
+
+	_detection_area.body_entered.connect(_on_detection_entered)
+	_detection_area.body_exited.connect(_on_detection_exited)
+
+
+func _on_detection_entered(body: Node3D) -> void:
+	if body == _target:
+		player_in_range = true
+
+
+func _on_detection_exited(body: Node3D) -> void:
+	if body == _target:
+		player_in_range = false
+
+
+## Создаёт ноду для отладочных линий LoS и крошек.
+func _setup_debug_visual() -> void:
+	_debug_imesh = ImmediateMesh.new()
+	_debug_mesh = MeshInstance3D.new()
+	_debug_mesh.mesh = _debug_imesh
+	_debug_mesh.set_as_top_level(true)
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.no_depth_test = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_debug_mesh.material_override = mat
+	add_child(_debug_mesh)
+
+
+## Перерисовывает линию LoS и точки крошек.
+func _update_debug_visual() -> void:
+	if _debug_imesh == null:
+		return
+	_debug_imesh.clear_surfaces()
+	if _debug_mesh != null:
+		_debug_mesh.visible = debug_visible
+	if not debug_visible or _target == null or _is_dying:
+		return
+
+	# Если рисовать нечего — не открываем surface (ImmediateMesh падает на пустом surface).
+	var has_breadcrumbs: bool = _ai != null and _ai._breadcrumbs.size() > 0
+	var has_search: bool = _ai != null and _ai.current_state == EnemyAI.State.SEARCH
+	var is_attacking: bool = _ai != null and (_ai.current_state == EnemyAI.State.TELEGRAPH or _ai.current_state == EnemyAI.State.ATTACK)
+	if not player_in_range and not has_search and not has_breadcrumbs and not is_attacking:
+		return
+
+	_debug_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+
+	# Линия LoS — рисуем только когда игрок реально в зоне детекции
+	# (только в этот момент скрипт пускает рейкаст).
+	if player_in_range:
+		var eye: Vector3 = Vector3(0.0, 0.8, 0.0)
+		var from: Vector3 = global_position + eye
+		var to: Vector3 = _target.global_position + eye
+		var has_los: bool = _ai != null and _ai._has_los
+		var color_los: Color = Color(0.2, 1.0, 0.2, 0.9) if has_los else Color(1.0, 0.2, 0.2, 0.9)
+		_debug_imesh.surface_set_color(color_los)
+		_debug_imesh.surface_add_vertex(from)
+		_debug_imesh.surface_set_color(color_los)
+		_debug_imesh.surface_add_vertex(to)
+
+	# Линия к investigation_target в SEARCH
+	if _ai != null and _ai.current_state == EnemyAI.State.SEARCH:
+		var search_color: Color = Color(1.0, 0.6, 0.0, 0.9)
+		_debug_imesh.surface_set_color(search_color)
+		_debug_imesh.surface_add_vertex(global_position + Vector3(0.0, 0.1, 0.0))
+		_debug_imesh.surface_set_color(search_color)
+		_debug_imesh.surface_add_vertex(investigation_target + Vector3(0.0, 0.1, 0.0))
+
+	# Цепочка крошек жёлтыми отрезками + вертикальные «штырьки»
+	if _ai != null and _ai._breadcrumbs.size() > 0:
+		var crumb_color: Color = Color(1.0, 0.95, 0.2, 0.9)
+		var prev: Vector3 = _ai._breadcrumbs[0] + Vector3(0.0, 0.05, 0.0)
+		for i: int in range(_ai._breadcrumbs.size()):
+			var p: Vector3 = _ai._breadcrumbs[i] + Vector3(0.0, 0.05, 0.0)
+			# вертикальный штырёк 0.5м
+			_debug_imesh.surface_set_color(crumb_color)
+			_debug_imesh.surface_add_vertex(p)
+			_debug_imesh.surface_set_color(crumb_color)
+			_debug_imesh.surface_add_vertex(p + Vector3(0.0, 0.5, 0.0))
+			# соединительная линия с предыдущей
+			if i > 0:
+				_debug_imesh.surface_set_color(crumb_color)
+				_debug_imesh.surface_add_vertex(prev)
+				_debug_imesh.surface_set_color(crumb_color)
+				_debug_imesh.surface_add_vertex(p)
+			prev = p
+
+	# Класс-специфичная отрисовка (стрельба/прыжок/бомба).
+	_draw_class_debug(_debug_imesh)
+
+	_debug_imesh.surface_end()
 
 
 ## Настроить визуал: манекен из KayKit с цветом стихии.
@@ -493,3 +817,4 @@ func _setup_visual() -> void:
 		sphere.height = 0.8
 		sphere.surface_set_material(0, _material)
 		_mesh.mesh = sphere
+	_mesh_base_scale = _mesh.scale
